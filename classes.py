@@ -491,47 +491,75 @@ class FeatureVector:
                                                   10: {}, 11: {}, 12: {}, 13: {}, 14: {}},
                          -1: {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {},
                               12: {}, 13: {}, 14: {}}}
-        self.sentence_document = {(1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (0, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (0, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (-1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (-1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}}
-        self.pre_sentence_sentence = {(1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (1, 0): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (0, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (0, 0): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (0, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}},
-                                      (-1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (-1, 0): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (-1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}}
-        self.pre_sentence_sentence_document = {(1, 1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (1, 1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (1, 0, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (1, 0, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}},
-                                               (1, -1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (1, -1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (0, 1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (0, 1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}},
-                                               (0, 0, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (0, 0, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (0, -1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (0, -1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}},
-                                               (-1, 1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (-1, 1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (-1, 0, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (-1, 0, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}},
-                                               (-1, -1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}, (-1, -1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
-                             13: {}, 14: {}}}
+        self.sentence_document = {
+            (1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                     13: {}, 14: {}},
+            (1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                      13: {}, 14: {}},
+            (0, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                     13: {}, 14: {}},
+            (0, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                      13: {}, 14: {}},
+            (-1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                      13: {}, 14: {}},
+            (-1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                       13: {}, 14: {}}}
+        self.pre_sentence_sentence = {
+            (1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                     13: {}, 14: {}},
+            (1, 0): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                     13: {}, 14: {}},
+            (1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                      13: {}, 14: {}},
+            (0, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                     13: {}, 14: {}},
+            (0, 0): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                     13: {}, 14: {}},
+            (0, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                      13: {}, 14: {}},
+            (-1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                      13: {}, 14: {}},
+            (-1, 0): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                      13: {}, 14: {}},
+            (-1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                       13: {}, 14: {}}}
+        self.pre_sentence_sentence_document = {
+            (1, 1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                        13: {}, 14: {}},
+            (1, 1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                         13: {}, 14: {}},
+            (1, 0, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                        13: {}, 14: {}},
+            (1, 0, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                         13: {}, 14: {}},
+            (1, -1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                         13: {}, 14: {}},
+            (1, -1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                          13: {}, 14: {}},
+            (0, 1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                        13: {}, 14: {}},
+            (0, 1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                         13: {}, 14: {}},
+            (0, 0, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                        13: {}, 14: {}},
+            (0, 0, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                         13: {}, 14: {}},
+            (0, -1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                         13: {}, 14: {}},
+            (0, -1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                          13: {}, 14: {}},
+            (-1, 1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                         13: {}, 14: {}},
+            (-1, 1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                          13: {}, 14: {}},
+            (-1, 0, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                         13: {}, 14: {}},
+            (-1, 0, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                          13: {}, 14: {}},
+            (-1, -1, 1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                          13: {}, 14: {}},
+            (-1, -1, -1): {1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}, 11: {}, 12: {},
+                           13: {}, 14: {}}}
         self.index = 0
 
     def increment_index(self):
@@ -551,143 +579,136 @@ class FeatureVector:
     def next_word(self, sentence, index):
         return sentence[index + 1].word if index != len(sentence) - 1 else "*"
 
-    def f_1_word_tag(self, token):
-        for i in range(1, 6):
-            if (token.word, token.tag) not in self.features[i][1]:
-                self.features[i][1][(token.word, token.tag)] = self.index
-                self.increment_index()
+    def f_1_word_tag(self, sentence, index):
+        return sentence[index].word, sentence[index].tag
+    #
+    # def f_1_word_tag(self, sentence, index):
+    #     for i in range(1, 6):
+    #         if (sentence[index].word, sentence[index].tag) not in self.features[i][1]:
+    #             self.features[i][1][(sentence[index].word, sentence[index].tag)] = self.index
+    #             self.increment_index()
 
-    def f_2_tag(self, token):
-        for i in range(1, 6):
-            if token.tag not in self.features[i][2]:
-                self.features[i][2][token.tag] = self.index
-                self.increment_index()
+    def f_2_tag(self, sentence, index):
+            return sentence[index].tag
 
     def f_3_bigram(self, sentence, index):
         _, pre_tag = self.pre_tags(sentence, index)
         pre_word = self.pre_word(sentence, index)
-        for i in range(1, 6):
-            if (pre_word, pre_tag, sentence[index].word, sentence[index].tag) not in self.features[i][3]:
-                self.features[i][3][(pre_word, pre_tag, sentence[index].word, sentence[index].tag)] = self.index
-                self.increment_index()
+        return pre_word, pre_tag, sentence[index].word, sentence[index].tag
 
     def f_4_bigram_none(self, sentence, index):
         _, pre_tag = self.pre_tags(sentence, index)
-        for i in range(1, 6):
-            if (pre_tag, sentence[index].word, sentence[index].tag) not in self.features[i][4]:
-                self.features[i][4][(pre_tag, sentence[index].word, sentence[index].tag)] = self.index
-                self.increment_index()
+         return pre_tag, sentence[index].word, sentence[index].tag
 
     def f_5_bigram_none(self, sentence, index):
         _, pre_tag = self.pre_tags(sentence, index)
         pre_word = self.pre_word(sentence, index)
-        for i in range(1, 6):
-            if (pre_word, pre_tag, sentence[index].tag) not in self.features[i][5]:
-                self.features[i][5][(pre_word, pre_tag, sentence[index].tag)] = self.index
-                self.increment_index()
+        return pre_word, pre_tag, sentence[index].tag
 
     def f_6_bigram_none_none(self, sentence, index):
         _, pre_tag = self.pre_tags(sentence, index)
-        for i in range(1, 6):
-            if (pre_tag, sentence[index].tag) not in self.features[i][6]:
-                self.features[i][6][(pre_tag, sentence[index].tag)] = self.index
-                self.increment_index()
+        return pre_tag, sentence[index].tag
 
     def f_7_trigram(self, sentence, index):
         pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
         pre_word = self.pre_word(sentence, index)
         pre_pre_word = self.pre_pre_word(sentence, index)
-        for i in range(1, 6):
-            if (pre_pre_word, pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag) not in \
-                    self.features[i][7]:
-                self.features[i][7][(
-                    pre_pre_word, pre_pre_tag, pre_word, pre_tag, sentence[index].word,
-                    sentence[index].tag)] = self.index
-                self.increment_index()
+        return pre_pre_word, pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag
 
     def f_8_trigram_pre_pre_none(self, sentence, index):
         pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
         pre_word = self.pre_word(sentence, index)
-        for i in range(1, 6):
-            if (pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag) not in self.features[i][8]:
-                self.features[i][8][
-                    (pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag)] = self.index
-                self.increment_index()
+        return pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag
 
     def f_9_trigram_pre_none(self, sentence, index):
         pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
         pre_pre_word = self.pre_pre_word(sentence, index)
-        for i in range(1, 6):
-            if (pre_pre_word, pre_pre_tag, pre_tag, sentence[index].word, sentence[index].tag) not in self.features[i][
-                9]:
-                self.features[i][9][
-                    (pre_pre_word, pre_pre_tag, pre_tag, sentence[index].word, sentence[index].tag)] = self.index
-                self.increment_index()
+        return pre_pre_word, pre_pre_tag, pre_tag, sentence[index].word, sentence[index].tag
 
     def f_10_trigram_pre_none(self, sentence, index):
         pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
         pre_word = self.pre_word(sentence, index)
         pre_pre_word = self.pre_pre_word(sentence, index)
-        for i in range(1, 6):
-            if (pre_pre_word, pre_pre_tag, pre_word, pre_tag, sentence[index].tag) not in self.features[i][10]:
-                self.features[i][10][(pre_pre_word, pre_pre_tag, pre_word, pre_tag, sentence[index].tag)] = self.index
-                self.increment_index()
+        return pre_pre_word, pre_pre_tag, pre_word, pre_tag, sentence[index].tag
 
     def f_11_trigram_pre_pre_none_pre_none(self, sentence, index):
         pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
-        for i in range(1, 6):
-            if (pre_pre_tag, pre_tag, sentence[index].word, sentence[index].tag) not in self.features[i][11]:
-                self.features[i][11][(pre_pre_tag, pre_tag, sentence[index].word, sentence[index].tag)] = self.index
-                self.increment_index()
+        return pre_pre_tag, pre_tag, sentence[index].word, sentence[index].tag
 
     def f_12_trigram_pre_pre_none_none(self, sentence, index):
         pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
         pre_word = self.pre_word(sentence, index)
-        for i in range(1, 6):
-            if (pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag) not in self.features[i][12]:
-                self.features[i][12][
-                    (pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag)] = self.index
-                self.increment_index()
+        return pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag
 
     def f_13_trigram_pre_none_none(self, sentence, index):
         pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
         pre_pre_word = self.pre_pre_word(sentence, index)
-        for i in range(1, 6):
-            if (pre_pre_word, pre_pre_tag, pre_tag, sentence[index].tag) not in self.features[i][13]:
-                self.features[i][13][(pre_pre_word, pre_pre_tag, pre_tag, sentence[index].tag)] = self.index
-                self.increment_index()
+        return pre_pre_word, pre_pre_tag, pre_tag, sentence[index].tag
 
     def f_14_trigram_none_none_none(self, sentence, index):
         pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
-        for i in range(1, 6):
-            if (pre_pre_tag, pre_tag, sentence[index].tag) not in self.features[i][14]:
-                self.features[i][14][(pre_pre_tag, pre_tag, sentence[index].tag)] = self.index
+        return pre_pre_tag, pre_tag, sentence[index].tag
+
+    def initialize_feature_based_on_label(self, token, sentence, index, pre_sentence_label=None, sentence_label=None,
+                                          document_label=None):
+        feature_types = ["f_1_word_tag", "f_2_tag, f_3_bigram", "f_4_bigram_none", "f_5_bigram_none",
+                         "f_6_bigram_none_none",
+                         "f_7_trigram", "f_8_trigram_pre_pre_none", "f_9_trigram_pre_none", "f_10_trigram_pre_none",
+                         "f_11_trigram_pre_pre_none_pre_none", "f_12_trigram_pre_pre_none_none",
+                         "f_13_trigram_pre_none_none",
+                         "f_14_trigram_none_none_none"]
+        if pre_sentence_label and sentence_label and document_label:
+            for feature_type in feature_types:
+                predicate = getattr(self, feature_type)(sentence.tokens, index)
+                self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][
+                    predicate] = self.index
                 self.increment_index()
 
-    def initialize_feature_based_on_label(self, document_label, sentence_label, pre_sentence_label, token, sentence, index):
-        self.f_1_word_tag(token)
-        self.f_2_tag(token)
-        self.f_3_bigram(sentence.tokens, index)
-        self.f_4_bigram_none(sentence.tokens, index)
-        self.f_5_bigram_none(sentence.tokens, index)
-        self.f_6_bigram_none_none(sentence.tokens, index)
-        self.f_7_trigram(sentence.tokens, index)
-        self.f_8_trigram_pre_pre_none(sentence.tokens, index)
-        self.f_9_trigram_pre_none(sentence.tokens, index)
-        self.f_10_trigram_pre_none(sentence.tokens, index)
-        self.f_11_trigram_pre_pre_none_pre_none(sentence.tokens, index)
-        self.f_12_trigram_pre_pre_none_none(sentence.tokens, index)
-        self.f_13_trigram_pre_none_none(sentence.tokens, index)
-        self.f_14_trigram_none_none_none(sentence.tokens, index)
+        if not pre_sentence_label and not sentence_label and document_label:
+            for feature_type in feature_types:
+                predicate = getattr(self, feature_type)(sentence.tokens, index)
+                self.pre_sentence_sentence_document[document_label][predicate] = self.index
+                self.increment_index()
 
-    def initialize_basic_features(self):
+        if not pre_sentence_label and sentence_label and not document_label:
+            for feature_type in feature_types:
+                predicate = getattr(self, feature_type)(sentence.tokens, index)
+                self.pre_sentence_sentence_document[sentence_label][predicate] = self.index
+                self.increment_index()
+
+        if not pre_sentence_label and sentence_label and document_label:
+            for feature_type in feature_types:
+                predicate = getattr(self, feature_type)(sentence.tokens, index)
+                self.pre_sentence_sentence_document[(sentence_label, document_label)][
+                    predicate] = self.index
+                self.increment_index()
+
+        if pre_sentence_label and sentence_label and not document_label:
+            for feature_type in feature_types:
+                predicate = getattr(self, feature_type)(sentence.tokens, index)
+                self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label)][
+                    predicate] = self.index
+                self.increment_index()
+
+    def initialize_features(self):
         for document in self.corpus:
             for sen_index, sentence in enumerate(self.documents.sentences):
                 for index, token in enumerate(sentence.tokens):
-                    self.initialize_feature_based_on_label(document.label, sentence.label,
-                                                           document[sen_index - 1].label, token, sentence, index)
+                    if sen_index >= 1:
+                        self.initialize_feature_based_on_label(token, sentence, index, document[sen_index - 1].label,
+                                                               sentence.label, document.label)
 
-    def evaluate_basic_feature_vector(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
+                        self.initialize_feature_based_on_label(token, sentence, index,
+                                                               pre_sentence_label=document[sen_index - 1].label,
+                                                               sentence_label=sentence.label)
+                    self.initialize_feature_based_on_label(token, sentence, index, document_label=document.label)
+
+                    self.initialize_feature_based_on_label(token, sentence, index, sentence_label=sentence.label)
+
+                    self.initialize_feature_based_on_label(token, sentence, index, sentence_label=sentence.label,
+                                                           document_label=document.label)
+
+    def evaluate_feature_vector(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
         token = sentence[index]
         tag = token.tag if tag is None else tag
         pre_pre_tag, pre_tag = (pre_pre_tag, pre_tag) if pre_pre_tag and pre_tag else self.pre_tags(sentence, index)
