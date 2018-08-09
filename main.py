@@ -58,8 +58,8 @@ def main():
     data_with_pos = "data_with_pos"
 
     train_set = Corpus()
-    train_set.load_file(data_with_pos, insert_sec_labels=True)
-    train_set.load_file(train_set_file_yelp, insert_sec_labels=True)
+    train_set.load_file(data_with_pos, insert_document_labels=True, insert_sentence_labels=True)
+    train_set.load_file(train_set_file_yelp, insert_document_labels=True, insert_sentence_labels=True)
     # test_set = Corpus(test_set_file, insert_labels=False)
     # comp_set = Corpus(comp_set_file, is_tagged=False, insert_tags=False)
     # data_exploration(train_set, test_set, comp_set)

@@ -53,8 +53,13 @@ TAGS = [CC, VBD, RP, MD, IN, SYM, RBR, VB, EX, FW, CD, VBG, WRB, NNPS, PDT, VBZ,
 
 TEST_TAGS = ['*'] + TAGS
 
+STRUCTURED_JOINT = "structured-joint"
+DOCUMENT_CLASSIFIER = "document-classifier"
+SENTENCE_CLASSIFIER = "sentence-classifier"
+SENTENCE_STRUCTURED = "sentence-structured"
+
 DATA_PATH = "./data/"
-# MODELS_PATH = "./models/"
+MODELS_PATH = "./models/"
 # BASIC_MODELS_PATH = MODELS_PATH + "basic/"
 # ADVANCED_MODELS_PATH = MODELS_PATH + "advanced/"
 # TEST_PATH = "./test/"
