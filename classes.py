@@ -1,29 +1,29 @@
 import re
 from multiprocessing.pool import Pool
+from qpsolvers import solve_qp
+from random import random
 
 import numpy as np
 import time
-from scipy.optimize import fmin_l_bfgs_b
 
-# from constants import TAGS, DEBUG, DATA_PATH, TEST_TAGS, PROCESSES, BASIC_MODELS_PATH, ADVANCED_MODELS_PATH, \
-#     BASIC_COMP_PATH, BASIC_TEST_PATH, ADVANCED_TEST_PATH, ADVANCED_COMP_PATH
+from sklearn.metrics import hamming_loss, zero_one_loss
 
-from constants import TAGS, DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
-    SENTENCE_STRUCTURED, MODELS_PATH
+from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
+    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS
 
 
 class Corpus:
     def __init__(self):
         self.documents = []
 
-    def load_file(self, file_name, insert_document_labels, insert_sentence_labels):
+    def load_file(self, file_name, documents_label, insert_sentence_labels):
         pattern = re.compile("^\d \d{7}$")
         with open(DATA_PATH + file_name) as f:
-            document = Document(insert_document_labels)
+            document = Document(documents_label)
             for i, line in enumerate(f):
                 if line == "\n":
                     self.documents.append(document)
-                    document = Document(insert_document_labels)  # TODO check if insert_doc_labels need to be here?
+                    document = Document(documents_label)
                 elif pattern.match(line):
                     continue
                 else:
@@ -43,19 +43,21 @@ class Corpus:
 
 
 class Document:
-    def __init__(self, insert_document_labels):
+    def __init__(self, label=None):
         self.sentences = []
-        if insert_document_labels:
-            self.label = "None"  # TODO check how to do this with specific data
+        self.label = label
 
     def load_sentence(self, line, insert_sec_labels):
         self.sentences.append(Sentence(line, insert_sec_labels))
 
     def count_sentences(self):
-        return np.size(self.sentences)
+        return len(self.sentences)
 
     def count_tokens(self):
         return sum([sen.count_tokens() for sen in self.sentences])
+
+    def y(self):
+        return [self.label] + [s.label for s in self.sentences]
 
     def __str__(self):
         return "\n".join([str(sentence) for sentence in self.sentences])
@@ -106,14 +108,6 @@ class TaggedWord:
         if word_tag is not None:
             word, tag = TaggedWord.split_word_tag(word_tag)
 
-        if DEBUG:
-            if not word:
-                raise Exception('Invalid arguments')
-            if not isinstance(word, str):
-                raise Exception('The word argument is not a string')
-            if tag and tag not in TAGS:
-                raise Exception('The tag argument is not in the tags list')
-
         self.word = word
         self.tag = tag
 
@@ -153,7 +147,7 @@ class Train:
         self.corpus = corpus
         self.feature_vector = feature_vector
         self.empirical_counts = None
-        self.evaluated_feature_vectors = {}
+        self.evaluated_feature_vectors = []
         self.w = None
         self.model = model
 
@@ -166,33 +160,50 @@ class Train:
 
     def evaluate_feature_vectors(self):
         start_time = time.time()
-        # for sentence in self.corpus.sentences:
-        #     for index, token in enumerate(sentence.tokens):
-        #         for tag in TAGS:
-        #             pre_pre_tag, pre_tag = self.feature_vector.pre_tags(sentence.tokens, index)
-        #             if self.is_basic:
-        #                 feature_vector = self.feature_vector.evaluate_basic_feature_vector(sentence.tokens, index,
-        #                                                                                    tag=tag)
-        #                 history = (pre_pre_tag, pre_tag, token.word)
-        #             else:
-        #                 pre_word = self.feature_vector.pre_word(sentence.tokens, index)
-        #                 next_word = self.feature_vector.next_word(sentence.tokens, index)
-        #                 feature_vector = self.feature_vector.evaluate_advanced_feature_vector(sentence.tokens, index,
-        #                                                                                       tag=tag)
-        #                 history = (pre_pre_tag, pre_tag, token.word, pre_word, next_word)
-        #
-        #             if history not in self.evaluated_feature_vectors:
-        #                 self.evaluated_feature_vectors[history] = {}
-        #             self.evaluated_feature_vectors[history][tag] = feature_vector if feature_vector.size > 0 else None
+        for document in self.corpus.documents:
+            self.evaluated_feature_vectors.append(self.evaluate_document_feature_vector(document))
         print("evaluate_feature_vectors done: {0:.3f} seconds".format(time.time() - start_time))
 
-    def train_model(self, lambda_param):
+    def evaluate_document_feature_vector(self, document, y_tag=None):
+        document_feature_vectors = []
+        y_document = y_tag[0] if y_tag is not None else None
+        for sentence_index, sentence in enumerate(document.sentences[1:], start=1):
+            y_sentence = y_tag[sentence_index] if y_tag is not None else None
+            y_pre_sentence = y_tag[sentence_index - 1] if y_tag is not None else None
+            document_feature_vectors.append(
+                self.feature_vector.evaluate_clique_feature_vector(document, sentence_index, self.model,
+                                                                   y_document, y_sentence, y_pre_sentence))
+        return np.array(document_feature_vectors)
+
+    def mira_algorithm(self, iterations=5, k=10):
         optimization_time = time.time()
-        print("Training model with lambda = {}, model = {}".format(lambda_param, self.model))
+        print("Training model: {}, k = {}, iterations = {}".format(self.model, k, iterations))
         print("------------------------------------")
-        # TODO train model and update self.w
+        for i in range(iterations):
+            for document, feature_vectors in zip(self.corpus.documents, self.evaluated_feature_vectors):
+                c = self.extract_random_labeling_subset(document, k)
+                self.w = solve_qp(*self.extract_qp_matrices(document, feature_vectors, document.y, c))
         print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
-        return None  # TODO
+
+    def extract_qp_matrices(self, document, feature_vectors, y, c):
+        M = np.eye(self.feature_vector.count_features())
+        q = np.copy(self.w)
+        y_fv = feature_vectors.sum(axis=1)
+        G = []
+        h = []
+        for y_tag in c:
+            y_tag_fv = self.evaluate_document_feature_vector(document, y_tag).sum(axis=1)
+            G.append(y_tag_fv - y_fv)
+            h.append(-hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]]))
+        G = np.array(G)
+        return M, q, G, h
+
+    @staticmethod
+    def extract_random_labeling_subset(document, k):
+        return [
+            [random.choice(DOCUMENT_LABELS)] +
+            [random.choice(SENTENCE_LABELS) for _ in range(document.count_sentences())]
+            for _ in k]
 
     def save_model(self, model_name):
         np.savetxt(MODELS_PATH + model_name, self.w)
@@ -406,20 +417,20 @@ class FeatureVector:
         self.pre_sentence_sentence_document = {}
         for i in range(1, 15):
             self.document[1][i] = {}
-            self.document[0][i] = {}
-        for i in range(-1, 2):
+            self.document[-1][i] = {}
+        for i in [-1, 1]:
             for j in range(1, 15):
                 self.sentence[i][j] = {}
-        for i in range(-1, 2):
+        for i in [-1, 1]:
             for j in [-1, 1]:
                 for k in range(1, 15):
                     self.sentence_document[(i, j)][k] = {}
-        for i in range(-1, 2):
-            for j in range(-1, 2):
+        for i in [-1, 1]:
+            for j in [-1, 1]:
                 for k in range(1, 15):
                     self.pre_sentence_sentence[(i, j)][k] = {}
-        for i in range(-1, 2):
-            for j in range(-1, 2):
+        for i in [-1, 1]:
+            for j in [-1, 1]:
                 for d in [-1, 1]:
                     for k in range(1, 15):
                         self.pre_sentence_sentence_document[(i, j, d)][k] = {}
@@ -571,13 +582,12 @@ class FeatureVector:
                         self.initialize_feature_based_on_label(sentence, index, sentence_label=sentence.label,
                                                                document_label=document.label)
 
-    def evaluate_feature_vector(self, document, sen_index, model, document_label=None, sentence_label=None,
-                                pre_sentence_label=None):
+    def evaluate_clique_feature_vector(self, document, sen_index, model, document_label=None, sentence_label=None,
+                                       pre_sentence_label=None):
         sentence = document[sen_index]
         document_label = document.label if document_label is None else document_label
         sentence_label = sentence.label if sentence_label is None else sentence_label
-        pre_sentence_label = document[
-            sen_index - 1].label if pre_sentence_label is None and sen_index >= 1 else pre_sentence_label  # TODO check what to do when sen_index=0 and pre_sentence_label is None?
+        pre_sentence_label = document[sen_index - 1].label if pre_sentence_label is None else pre_sentence_label
 
         evaluated_feature = []
         for index, token in enumerate(sentence.tokens):
