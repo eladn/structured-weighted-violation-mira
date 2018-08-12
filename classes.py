@@ -14,7 +14,7 @@ from scipy.sparse import csr_matrix, hstack
 from sklearn.metrics import hamming_loss, zero_one_loss
 
 from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
-    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS
+    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, PROCESSES, TEST_PATH
 
 
 class Corpus:
@@ -181,7 +181,7 @@ class Train:
             feature_indices = self.feature_vector.evaluate_clique_feature_vector(document, sentence_index, self.model,
                                                                                  y_document, y_sentence, y_pre_sentence)
             col_ind += feature_indices
-            row_ind += [sentence_index-1 for _ in feature_indices]
+            row_ind += [sentence_index - 1 for _ in feature_indices]
 
         return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)),
                           shape=(document.count_sentences() - 1, self.feature_vector.count_features()))  # TODO
@@ -243,8 +243,8 @@ class Train:
                 G = np.vstack((G, y_tag_fv - y_fv))
             h.append(-hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]]))
         G = csr_matrix(G)
-        h = np.array(h).reshape(len(c),)
-        return M, q.reshape((self.feature_vector.count_features()),), G, h
+        h = np.array(h).reshape(len(c), )
+        return M, q.reshape((self.feature_vector.count_features()), ), G, h
 
     @staticmethod
     def extract_random_labeling_subset(document, k):
@@ -319,139 +319,181 @@ class Test:
     #     next_word = self.feature_vector.next_word(sentence.tokens, index)
     #     return self.evaluated_exp_v_f[(token.word, pre_word, next_word)][pre_pre_index][pre_index][t_index]
 
-    def v_f(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
-        if self.is_basic:
-            f = self.feature_vector.evaluate_basic_feature_vector(sentence.tokens, index,
-                                                                  pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag)
-        else:
-            f = self.feature_vector.evaluate_advanced_feature_vector(sentence.tokens, index,
-                                                                     pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag)
-        return np.take(self.v, f).sum() if f.size > 0 else 0
+    # def v_f(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
+    #     if self.is_basic:
+    #         f = self.feature_vector.evaluate_basic_feature_vector(sentence.tokens, index,
+    #                                                               pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag)
+    #     else:
+    #         f = self.feature_vector.evaluate_advanced_feature_vector(sentence.tokens, index,
+    #                                                                  pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag)
+    #     return np.take(self.v, f).sum() if f.size > 0 else 0
+    #
+    # def exp_v_f(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
+    #     return np.exp(self.v_f(sentence, index, pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag))
+    #
+    # def sum_exp_v_f(self, sentence, index, pre_pre_tag=None, pre_tag=None):
+    #     return np.array(
+    #         [self.exp_v_f(sentence, index, pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag) for tag in TAGS]).sum()
 
-    def exp_v_f(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
-        return np.exp(self.v_f(sentence, index, pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag))
+    # def q(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
+    #     return self.exp_v_f(sentence, index, pre_pre_tag, pre_tag, tag) / \
+    #            self.sum_exp_v_f(sentence, index, pre_pre_tag, pre_tag)
 
-    def sum_exp_v_f(self, sentence, index, pre_pre_tag=None, pre_tag=None):
-        return np.array(
-            [self.exp_v_f(sentence, index, pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag) for tag in TAGS]).sum()
+    def sentence_score(self, document, sen_index, model, document_label, sentence_label, pre_sentence_label):
+        return np.dot(self.w, self.feature_vector.evaluate_clique_feature_vector(document, sen_index, model,
+                                                                                 document_label=document_label,
+                                                                                 sentence_label=sentence_label,
+                                                                                 pre_sentence_label=pre_sentence_label))
 
-    def q(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
-        return self.exp_v_f(sentence, index, pre_pre_tag, pre_tag, tag) / \
-               self.sum_exp_v_f(sentence, index, pre_pre_tag, pre_tag)
-
-    def viterbi_on_sentence(self, sentence, s_index):
+    def viterbi_on_document(self, document, document_index, model):
         start_time = time.time()
-        n = sentence.count_tokens()
-        count_tags = len(TAGS)
-        pi = np.zeros((n, count_tags, count_tags))
-        bp = np.ndarray(shape=(n, count_tags, count_tags), dtype=object)
-        bp[:] = None
-        pi[0, 0, :] = np.array([self.q(sentence, 0, "*", "*", tag) for tag in TAGS])
-        bp[0, 0, :] = "*"
-        for k, token in enumerate(sentence.tokens[1:], 1):
-            print("Token: {}".format(k))
-            for u_index, u in enumerate(TAGS):
-                tags = TAGS if k != 1 else ["*"]
-                denominators = np.array([self.sum_exp_v_f(sentence, k, t, u) for t in tags])
-                for v_index, v in enumerate(TAGS):
-                    pi_q = [self.exp_v_f(sentence, k, t, u, v) / denominators[t_index] * pi[
-                        k - 1, t_index, u_index] for t_index, t in enumerate(tags)]
-                    pi[k, u_index, v_index] = np.amax(pi_q)
-                    bp[k, u_index, v_index] = TAGS[np.argmax(pi_q)] if k != 1 else "*"
+        n = document.count_sentences()
+        count_labels = len(SENTENCE_LABELS)
+        pi = np.zeros((n, count_labels))
+        bp = np.zeros((n, count_labels))
+        for document_label in DOCUMENT_LABELS:
+            pi[0, :] = np.array([self.sentence_score(document, 0, model, document_label, label, 0) for label in SENTENCE_LABELS])
+            bp[0, :] = 0
+            for k, sentence in enumerate(document.sentences[1:], start=1):
+                print("Sentence: {}".format(k))
+                for v_index, v in enumerate(SENTENCE_LABELS):
+                    pi_q = [self.sentence_score(document, k, model, document_label, v, t) + pi[
+                        k - 1, t_index] for t_index, t in enumerate(SENTENCE_LABELS)]
+                    pi[k, v_index] = np.amax(pi_q)
+                    bp[k, v_index] = SENTENCE_LABELS[np.argmax(pi_q)] if k != 1 else 0
 
-        pre_tag, tag = np.where(pi[n - 1] == pi[n - 1].max())
+        sentence_label = np.where(pi[n - 1] == pi[n - 1].max())
+        # pre_tag, tag = np.where(pi[n - 1] == pi[n - 1].max())
 
-        sentence.tokens[n - 2].tag = TAGS[pre_tag[0]]
-        sentence.tokens[n - 1].tag = TAGS[tag[0]]
+        # sentence.tokens[n - 2].tag = TAGS[pre_tag[0]]
+        document.sentences[n - 1].label = SENTENCE_LABELS[sentence_label[0]]
 
-        for k in range(n - 3, -1, -1):
-            sentence.tokens[k].tag = bp[k + 2,
-                                        TAGS.index(sentence.tokens[k + 1].tag),
-                                        TAGS.index(sentence.tokens[k + 2].tag)]
+        for k in range(n - 2, -1, -1):
+            document.sentences[k].label = bp[k + 1, SENTENCE_LABELS.index(document.sentences[k + 1].label)]
+            # sentence.tokens[k].tag = bp[k + 2,
+            #                             TAGS.index(sentence.tokens[k + 1].tag),
+            #                             TAGS.index(sentence.tokens[k + 2].tag)]
+        # TODO decide what is the document label
 
-        print("Sentence {} viterbi done".format(s_index))
+        print("Sentence {} viterbi done".format(document_index))
         print("{0:.3f} seconds".format(time.time() - start_time))
-        return sentence, s_index
+        return document, document_index
+
+    # def viterbi_on_sentence(self, sentence, s_index):
+    #     start_time = time.time()
+    #     n = sentence.count_tokens()
+    #     count_tags = len(TAGS)
+    #     pi = np.zeros((n, count_tags, count_tags))
+    #     bp = np.ndarray(shape=(n, count_tags, count_tags), dtype=object)
+    #     bp[:] = None
+    #     pi[0, 0, :] = np.array([self.q(sentence, 0, "*", "*", tag) for tag in TAGS])
+    #     bp[0, 0, :] = "*"
+    #     for k, token in enumerate(sentence.tokens[1:], 1):
+    #         print("Token: {}".format(k))
+    #         for u_index, u in enumerate(TAGS):
+    #             tags = TAGS if k != 1 else ["*"]
+    #             denominators = np.array([self.sum_exp_v_f(sentence, k, t, u) for t in tags])
+    #             for v_index, v in enumerate(TAGS):
+    #                 pi_q = [self.exp_v_f(sentence, k, t, u, v) / denominators[t_index] * pi[
+    #                     k - 1, t_index, u_index] for t_index, t in enumerate(tags)]
+    #                 pi[k, u_index, v_index] = np.amax(pi_q)
+    #                 bp[k, u_index, v_index] = TAGS[np.argmax(pi_q)] if k != 1 else "*"
+    #
+    #     pre_tag, tag = np.where(pi[n - 1] == pi[n - 1].max())
+    #
+    #     sentence.tokens[n - 2].tag = TAGS[pre_tag[0]]
+    #     sentence.tokens[n - 1].tag = TAGS[tag[0]]
+    #
+    #     for k in range(n - 3, -1, -1):
+    #         sentence.tokens[k].tag = bp[k + 2,
+    #                                     TAGS.index(sentence.tokens[k + 1].tag),
+    #                                     TAGS.index(sentence.tokens[k + 2].tag)]
+    #
+    #     print("Sentence {} viterbi done".format(s_index))
+    #     print("{0:.3f} seconds".format(time.time() - start_time))
+    #     return sentence, s_index
 
     def viterbi(self):
         start_time = time.time()
 
         with Pool(processes=PROCESSES) as pool:
-            results = pool.starmap(self.viterbi_on_sentence, [(s, i) for i, s in enumerate(self.corpus.sentences)])
-        for sentence, s_index in results:
-            self.corpus.sentences[s_index] = sentence
+            results = pool.starmap(self.viterbi_on_document, [(d, i) for i, s in enumerate(self.corpus.documents)])
+        for document, d_index in results:
+            self.corpus.documents[d_index] = document
 
         print("viterbi done: {0:.3f} seconds".format(time.time() - start_time))
 
     def load_model(self, model_name):
-        path = BASIC_MODELS_PATH if self.is_basic else ADVANCED_MODELS_PATH
-        self.v = np.loadtxt(path + model_name)
+        path = MODELS_PATH
+        self.w = np.loadtxt(path + model_name)
 
     def evaluate_model(self, ground_truth):
         results = {
             "correct": 0,
             "errors": 0
         }
-        for s1, s2 in zip(self.corpus.sentences, ground_truth.sentences):
-            for t1, t2 in zip(s1.tokens, s2.tokens):
-                if t1.tag == t2.tag:
+        for d1, d2 in zip(self.corpus.documents, ground_truth.documents):
+            for s1, s2 in zip(d1.sentences, d2.sentences):
+                if s1.label == s2.label:
                     results["correct"] += 1
                 else:
                     results["errors"] += 1
 
         return results, results["correct"] / sum(results.values())
 
-    def print_results_to_file(self, tagged_file, model_name, is_test):
-        if is_test:
-            path = BASIC_TEST_PATH if self.is_basic else ADVANCED_TEST_PATH
-        else:
-            path = BASIC_COMP_PATH if self.is_basic else ADVANCED_COMP_PATH
-
-        f = open(path + model_name, 'w')
-        for s_truth, s_eval in zip(tagged_file.sentences, self.corpus.sentences):
-            f.write(" ".join(["{}_{}".format(t_truth.word, t_eval.tag) for t_truth, t_eval
-                              in zip(s_truth.tokens, s_eval.tokens)]) + "\n")
+    # def print_results_to_file(self, tagged_file, model_name, is_test):
+    #     if is_test:
+    #         path = BASIC_TEST_PATH if self.is_basic else ADVANCED_TEST_PATH
+    #     else:
+    #         path = BASIC_COMP_PATH if self.is_basic else ADVANCED_COMP_PATH
+    #
+    #     f = open(path + model_name, 'w')
+    #     for s_truth, s_eval in zip(tagged_file.sentences, self.corpus.sentences):
+    #         f.write(" ".join(["{}_{}".format(t_truth.word, t_eval.tag) for t_truth, t_eval
+    #                           in zip(s_truth.tokens, s_eval.tokens)]) + "\n")
 
     def confusion_matrix(self, ground_truth, model_name, is_test):
         if is_test:
-            path = BASIC_TEST_PATH if self.is_basic else ADVANCED_TEST_PATH
-        else:
-            path = BASIC_COMP_PATH if self.is_basic else ADVANCED_COMP_PATH
+            path = TEST_PATH
+        # else:
+        #     path = BASIC_COMP_PATH if self.is_basic else ADVANCED_COMP_PATH
 
-        for s1, s2 in zip(self.corpus.sentences, ground_truth.sentences):
-            for t1, t2 in zip(s1.tokens, s2.tokens):
-                self.matrix[TAGS.index(t1.tag)][TAGS.index(t2.tag)] += 1
+        for d1, d2 in zip(self.corpus.documents, ground_truth.documents):
+            for s1, s2 in zip(d1.sentences, d2.sentences):
+                self.matrix[SENTENCE_LABELS.index(s1.label)][SENTENCE_LABELS.index(s2.label)] += 1
         np.savetxt(path + "{}_confusion_matrix".format(model_name), self.matrix)
 
         file = open(path + "{}_confusion_matrix_lines".format(model_name), "w")
-        for i in range(len(TAGS)):
-            for j in range(len(TAGS)):
+        for i in range(len(SENTENCE_LABELS)):
+            for j in range(len(SENTENCE_LABELS)):
                 value = self.matrix[i][j]
-                file.write("Truth tag: {}, Predicted tag: {}, number of errors: {}\n".format(TAGS[j], TAGS[i], value))
+                file.write("Truth label: {}, Predicted label: {}, number of errors: {}\n".format(SENTENCE_LABELS[j],
+                                                                                                 SENTENCE_LABELS[i],
+                                                                                                 value))
         file.close()
 
-    def confusion_matrix_zeros_diagonal(self):
-        for i in range(len(TAGS)):
-            self.matrix[i][i] = 0
+    # def confusion_matrix_zeros_diagonal(self):
+    #     for i in range(len(TAGS)):
+    #         self.matrix[i][i] = 0
 
-    def confusion_matrix_ten_max_errors(self, model_name, is_test):
-        if is_test:
-            path = BASIC_TEST_PATH if self.is_basic else ADVANCED_TEST_PATH
-        else:
-            path = BASIC_COMP_PATH if self.is_basic else ADVANCED_COMP_PATH
-
-        self.confusion_matrix_zeros_diagonal()
-        ten_max_values = {}
-        file_name = "{}_confusion_matrix_ten_max_errors".format(model_name)
-        file = open(path + file_name, "w")
-        for k in range(10):
-            i, j = np.unravel_index(self.matrix.argmax(), self.matrix.shape)
-            value = self.matrix[i][j]
-            ten_max_values[(i, j)] = value
-            self.matrix[i][j] = 0
-            file.write("Truth tag: {}, Predicted tag: {}, number of errors: {}\n".format(TAGS[j], TAGS[i], value))
-        file.close()
-        return ten_max_values
+    # def confusion_matrix_ten_max_errors(self, model_name, is_test):
+    #     if is_test:
+    #         path = BASIC_TEST_PATH if self.is_basic else ADVANCED_TEST_PATH
+    #     else:
+    #         path = BASIC_COMP_PATH if self.is_basic else ADVANCED_COMP_PATH
+    #
+    #     self.confusion_matrix_zeros_diagonal()
+    #     ten_max_values = {}
+    #     file_name = "{}_confusion_matrix_ten_max_errors".format(model_name)
+    #     file = open(path + file_name, "w")
+    #     for k in range(10):
+    #         i, j = np.unravel_index(self.matrix.argmax(), self.matrix.shape)
+    #         value = self.matrix[i][j]
+    #         ten_max_values[(i, j)] = value
+    #         self.matrix[i][j] = 0
+    #         file.write("Truth tag: {}, Predicted tag: {}, number of errors: {}\n".format(TAGS[j], TAGS[i], value))
+    #     file.close()
+    #     return ten_max_values
 
 
 class FeatureVector:
@@ -580,7 +622,8 @@ class FeatureVector:
         if pre_sentence_label and sentence_label and document_label:
             for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
-                self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][feature_index][
+                self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][
+                    feature_index][
                     predicate] = self.index
                 self.increment_index()
 
@@ -617,12 +660,13 @@ class FeatureVector:
                     if sen_index >= 1:
                         if model == STRUCTURED_JOINT:
                             self.initialize_feature_based_on_label(
-                                sentence, index, document.sentences[sen_index - 1].label, sentence.label, document.label)
+                                sentence, index, document.sentences[sen_index - 1].label, sentence.label,
+                                document.label)
 
                         if model in (STRUCTURED_JOINT, SENTENCE_STRUCTURED):
-                                self.initialize_feature_based_on_label(
-                                    sentence, index, pre_sentence_label=document.sentences[sen_index - 1].label,
-                                    sentence_label=sentence.label)
+                            self.initialize_feature_based_on_label(
+                                sentence, index, pre_sentence_label=document.sentences[sen_index - 1].label,
+                                sentence_label=sentence.label)
                     if model in (STRUCTURED_JOINT, DOCUMENT_CLASSIFIER):
                         self.initialize_feature_based_on_label(sentence, index, document_label=document.label)
 
@@ -639,7 +683,8 @@ class FeatureVector:
         sentence = document.sentences[sen_index]
         document_label = document.label if document_label is None else document_label
         sentence_label = sentence.label if sentence_label is None else sentence_label
-        pre_sentence_label = document.sentences[sen_index - 1].label if pre_sentence_label is None else pre_sentence_label
+        pre_sentence_label = document.sentences[
+            sen_index - 1].label if pre_sentence_label is None else pre_sentence_label
 
         evaluated_feature = []
         for index, token in enumerate(sentence.tokens):
@@ -681,7 +726,8 @@ class FeatureVector:
                     if value:
                         evaluated_feature.append(value)
                 for f_index, arguments in enumerate(feature_arguments):
-                    value = self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][f_index + 1].get(arguments)
+                    value = self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][
+                        f_index + 1].get(arguments)
                     if value:
                         evaluated_feature.append(value)
 

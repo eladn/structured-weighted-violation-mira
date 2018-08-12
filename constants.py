@@ -1,6 +1,6 @@
 DEBUG = True
 
-# PROCESSES = 8
+PROCESSES = 8
 
 DOCUMENT_LABELS = [1, -1]
 SENTENCE_LABELS = [1, -1]
@@ -14,7 +14,7 @@ DATA_PATH = "./data/"
 MODELS_PATH = "./models/"
 # BASIC_MODELS_PATH = MODELS_PATH + "basic/"
 # ADVANCED_MODELS_PATH = MODELS_PATH + "advanced/"
-# TEST_PATH = "./test/"
+TEST_PATH = "./test/"
 # BASIC_TEST_PATH = TEST_PATH + "basic/"
 # ADVANCED_TEST_PATH = TEST_PATH + "advanced/"
 # COMP_PATH = "./comp/"
