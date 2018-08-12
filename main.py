@@ -36,14 +36,14 @@ def data_exploration(train_set, test_set, comp_set):
 
 
 def main():
-    do_train = False
-    do_test = True
+    do_train = True
+    do_test = False
 
     k = 10
     mira_iterations = 5
 
-    positive_docs_file = "pos.txt"
-    negative_docs_file = "neg.txt"
+    positive_docs_file = "pos-5.txt"
+    negative_docs_file = "neg-5.txt"
 
     model = STRUCTURED_JOINT
     model_name = "{}-k{}-iter{}.txt".format(STRUCTURED_JOINT, k, mira_iterations)

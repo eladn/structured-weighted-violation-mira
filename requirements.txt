@@ -1,0 +1,6 @@
+
+
+# from the anaconda directory:
+pip install qpsolvers
+
+conda install -c oxfordcontrol osqp

@@ -1,11 +1,16 @@
 import re
 from multiprocessing.pool import Pool
-from qpsolvers import solve_qp
-from random import random
 
+import random
+from scipy import sparse
+
+import cvxopt
 import numpy as np
 import time
 
+from qpsolvers import solve_qp
+from scipy.optimize import minimize
+from scipy.sparse import csr_matrix, hstack
 from sklearn.metrics import hamming_loss, zero_one_loss
 
 from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
@@ -68,9 +73,9 @@ class Sentence:
         self.tokens = []
         splitted_sec = sentence.split("\t")
         if insert_sec_labels:
-            self.label = splitted_sec[0]
+            self.label = int(splitted_sec[0])
         else:
-            self.label = "None"
+            self.label = None
         words = "\t".join(splitted_sec[1:])
         self.tokens = [TaggedWord(word_tag=token) for token in Sentence.split_cleaned_line(words)]
 
@@ -160,20 +165,32 @@ class Train:
 
     def evaluate_feature_vectors(self):
         start_time = time.time()
-        for document in self.corpus.documents:
+        print("Evaluating features")
+        for doc_index, document in enumerate(self.corpus.documents, start=1):
             self.evaluated_feature_vectors.append(self.evaluate_document_feature_vector(document))
+            print("Document #{} evaluated features".format(doc_index))
         print("evaluate_feature_vectors done: {0:.3f} seconds".format(time.time() - start_time))
 
     def evaluate_document_feature_vector(self, document, y_tag=None):
-        document_feature_vectors = []
+        # TODO if not structured - should not count from 1
         y_document = y_tag[0] if y_tag is not None else None
-        for sentence_index, sentence in enumerate(document.sentences[1:], start=1):
+        row_ind, col_ind = [], []
+        for sentence_index, sentence in enumerate(document.sentences[1:], start=1):  # TODO
             y_sentence = y_tag[sentence_index] if y_tag is not None else None
             y_pre_sentence = y_tag[sentence_index - 1] if y_tag is not None else None
-            document_feature_vectors.append(
-                self.feature_vector.evaluate_clique_feature_vector(document, sentence_index, self.model,
-                                                                   y_document, y_sentence, y_pre_sentence))
-        return np.array(document_feature_vectors)
+            feature_indices = self.feature_vector.evaluate_clique_feature_vector(document, sentence_index, self.model,
+                                                                                 y_document, y_sentence, y_pre_sentence)
+            col_ind += feature_indices
+            row_ind += [sentence_index-1 for _ in feature_indices]
+
+        return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)),
+                          shape=(document.count_sentences() - 1, self.feature_vector.count_features()))  # TODO
+
+    def loss(self, w, w_i):
+        return np.sum((w - w_i) ** 2)
+
+    def gradient(self, w, w_i):
+        return 2 * np.sum(w - w_i)
 
     def mira_algorithm(self, iterations=5, k=10):
         optimization_time = time.time()
@@ -182,28 +199,59 @@ class Train:
         for i in range(iterations):
             for document, feature_vectors in zip(self.corpus.documents, self.evaluated_feature_vectors):
                 c = self.extract_random_labeling_subset(document, k)
-                self.w = solve_qp(*self.extract_qp_matrices(document, feature_vectors, document.y, c))
+                # minimize(fun=self.loss, x0=np.zeros(self.w.shape), method='SLSQP',
+                #          args=(np.copy(self.w),), jac=self.gradient,
+                #          constraints=self.optimization_constraints(document, feature_vectors, document.y(), c),
+                #          options={"disp": True})
+                # return
+
+                self.w = solve_qp(*self.extract_qp_matrices(document, feature_vectors, document.y(), c), solver="osqp")
         print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
 
+    # def optimization_constraints(self, document, feature_vectors, y, c):
+    #     y_fv = feature_vectors.sum(axis=0)
+    #     y_fv = np.asarray(y_fv).reshape((y_fv.shape[1],))
+    #     G = []
+    #     h = []
+    #     for y_tag in c:
+    #         y_tag_fv = self.evaluate_document_feature_vector(document, y_tag).sum(axis=0)
+    #         y_tag_fv = np.asarray(y_tag_fv).reshape((y_tag_fv.shape[1],))
+    #         G.append(y_tag_fv - y_fv)
+    #         h.append(-hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]]))
+    #     G = np.array(G)
+    #     h = np.array(h)
+    #     return {
+    #         'type': 'ineq',
+    #         'fun': lambda w: np.dot(G, w) - h,
+    #         'jac': lambda w: G
+    #     }
+
     def extract_qp_matrices(self, document, feature_vectors, y, c):
-        M = np.eye(self.feature_vector.count_features())
+        # M = cvxopt.spmatrix(np.ones(count_features), np.arange(count_features), np.arange(count_features))
+        M = sparse.eye(self.feature_vector.count_features())
         q = np.copy(self.w)
-        y_fv = feature_vectors.sum(axis=1)
-        G = []
+        y_fv = feature_vectors.sum(axis=0)
+        y_fv = np.asarray(y_fv).reshape((y_fv.shape[1],))
+        G = None
         h = []
         for y_tag in c:
-            y_tag_fv = self.evaluate_document_feature_vector(document, y_tag).sum(axis=1)
-            G.append(y_tag_fv - y_fv)
+            y_tag_fv = self.evaluate_document_feature_vector(document, y_tag).sum(axis=0)
+            y_tag_fv = np.asarray(y_tag_fv)  # .reshape((y_tag_fv.shape[1],))
+            if G is None:
+                G = y_tag_fv - y_fv
+            else:
+                G = np.vstack((G, y_tag_fv - y_fv))
             h.append(-hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]]))
-        G = np.array(G)
-        return M, q, G, h
+        G = csr_matrix(G)
+        h = np.array(h).reshape(len(c),)
+        return M, q.reshape((self.feature_vector.count_features()),), G, h
 
     @staticmethod
     def extract_random_labeling_subset(document, k):
         return [
             [random.choice(DOCUMENT_LABELS)] +
             [random.choice(SENTENCE_LABELS) for _ in range(document.count_sentences())]
-            for _ in k]
+            for _ in range(k)]
 
     def save_model(self, model_name):
         np.savetxt(MODELS_PATH + model_name, self.w)
@@ -213,53 +261,52 @@ class Train:
 
 
 class Test:
-    def __init__(self, corpus, feature_vector, is_basic, v=None):
+    def __init__(self, corpus, feature_vector, model, w):
         if DEBUG:
             if not isinstance(corpus, Corpus):
                 raise Exception('The corpus argument is not a Corpus object')
+        # self.matrix = np.zeros((len(TAGS), len(TAGS)))
         self.corpus = corpus
         self.feature_vector = feature_vector
-        self.v = v
-        self.is_basic = is_basic
-        self.evaluated_exp_v_f = {}
-        self.matrix = np.zeros((len(TAGS), len(TAGS)))
+        self.w = w
+        self.model = model
 
-    def evaluate_exp_v_f_on_sentence(self, sentences, b_index):
-        evaluated_exp_v_f = {}
-        for s_index, sentence in enumerate(sentences):
-            for index, token in enumerate(sentence.tokens):
-                if self.is_basic:
-                    history = token.word
-                else:
-                    pre_word = self.feature_vector.pre_word(sentence.tokens, index)
-                    next_word = self.feature_vector.next_word(sentence.tokens, index)
-                    history = (token.word, pre_word, next_word)
+    # def evaluate_exp_v_f_on_sentence(self, sentences, b_index):
+    #     evaluated_exp_v_f = {}
+    #     for s_index, sentence in enumerate(sentences):
+    #         for index, token in enumerate(sentence.tokens):
+    #             if self.is_basic:
+    #                 history = token.word
+    #             else:
+    #                 pre_word = self.feature_vector.pre_word(sentence.tokens, index)
+    #                 next_word = self.feature_vector.next_word(sentence.tokens, index)
+    #                 history = (token.word, pre_word, next_word)
+    #
+    #             count_test_tags = len(TEST_TAGS)
+    #             evaluated_exp_v_f[history] = np.ones((count_test_tags, count_test_tags, count_test_tags))
+    #
+    #             for pre_pre_index, pre_pre_tag in enumerate(TEST_TAGS):
+    #                 for pre_index, pre_tag in enumerate(TEST_TAGS):
+    #                     for t_index, tag in enumerate(TEST_TAGS):
+    #                         evaluated_exp_v_f[history][pre_pre_index][pre_index][t_index] = \
+    #                             self.exp_v_f(sentence, index, pre_pre_tag, pre_tag, tag)
+    #         print("test evaluate_exp_v_f_on_sentence {} (batch {}) done".format(s_index, b_index))
+    #
+    #     print("test evaluate_exp_v_f_on_sentence batch {} done".format(b_index))
+    #     return evaluated_exp_v_f
 
-                count_test_tags = len(TEST_TAGS)
-                evaluated_exp_v_f[history] = np.ones((count_test_tags, count_test_tags, count_test_tags))
-
-                for pre_pre_index, pre_pre_tag in enumerate(TEST_TAGS):
-                    for pre_index, pre_tag in enumerate(TEST_TAGS):
-                        for t_index, tag in enumerate(TEST_TAGS):
-                            evaluated_exp_v_f[history][pre_pre_index][pre_index][t_index] = \
-                                self.exp_v_f(sentence, index, pre_pre_tag, pre_tag, tag)
-            print("test evaluate_exp_v_f_on_sentence {} (batch {}) done".format(s_index, b_index))
-
-        print("test evaluate_exp_v_f_on_sentence batch {} done".format(b_index))
-        return evaluated_exp_v_f
-
-    def evaluate_exp_v_f(self):
-        start_time = time.time()
-        splits = PROCESSES * 3
-        with Pool(processes=PROCESSES) as pool:
-            results = pool.starmap(self.evaluate_exp_v_f_on_sentence,
-                                   [(s, i) for i, s in enumerate(np.array_split(self.corpus.sentences, splits))])
-        for r in results:
-            for history, exp_v_f in r.items():
-                if history not in self.evaluated_exp_v_f:
-                    self.evaluated_exp_v_f[history] = exp_v_f
-
-        print("evaluate_exp_v_f done: {0:.3f} seconds".format(time.time() - start_time))
+    # def evaluate_exp_v_f(self):
+    #     start_time = time.time()
+    #     splits = PROCESSES * 3
+    #     with Pool(processes=PROCESSES) as pool:
+    #         results = pool.starmap(self.evaluate_exp_v_f_on_sentence,
+    #                                [(s, i) for i, s in enumerate(np.array_split(self.corpus.sentences, splits))])
+    #     for r in results:
+    #         for history, exp_v_f in r.items():
+    #             if history not in self.evaluated_exp_v_f:
+    #                 self.evaluated_exp_v_f[history] = exp_v_f
+    #
+    #     print("evaluate_exp_v_f done: {0:.3f} seconds".format(time.time() - start_time))
 
     # def predefined_exp_v_f(self, sentence, index, pre_pre_tag, pre_tag, tag):
     #     token = sentence.tokens[index]
@@ -419,19 +466,23 @@ class FeatureVector:
             self.document[1][i] = {}
             self.document[-1][i] = {}
         for i in [-1, 1]:
+            self.sentence[i] = {}
             for j in range(1, 15):
                 self.sentence[i][j] = {}
         for i in [-1, 1]:
             for j in [-1, 1]:
+                self.sentence_document[(i, j)] = {}
                 for k in range(1, 15):
                     self.sentence_document[(i, j)][k] = {}
         for i in [-1, 1]:
             for j in [-1, 1]:
+                self.pre_sentence_sentence[(i, j)] = {}
                 for k in range(1, 15):
                     self.pre_sentence_sentence[(i, j)][k] = {}
         for i in [-1, 1]:
             for j in [-1, 1]:
                 for d in [-1, 1]:
+                    self.pre_sentence_sentence_document[(i, j, d)] = {}
                     for k in range(1, 15):
                         self.pre_sentence_sentence_document[(i, j, d)][k] = {}
 
@@ -520,58 +571,58 @@ class FeatureVector:
 
     def initialize_feature_based_on_label(self, sentence, index, pre_sentence_label=None, sentence_label=None,
                                           document_label=None):
-        feature_types = ["f_1_word_tag", "f_2_tag, f_3_bigram", "f_4_bigram_none", "f_5_bigram_none",
+        feature_types = ["f_1_word_tag", "f_2_tag", "f_3_bigram", "f_4_bigram_none", "f_5_bigram_none",
                          "f_6_bigram_none_none",
                          "f_7_trigram", "f_8_trigram_pre_pre_none", "f_9_trigram_pre_none", "f_10_trigram_pre_none",
                          "f_11_trigram_pre_pre_none_pre_none", "f_12_trigram_pre_pre_none_none",
                          "f_13_trigram_pre_none_none",
                          "f_14_trigram_none_none_none"]
         if pre_sentence_label and sentence_label and document_label:
-            for feature_type in feature_types:
+            for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
-                self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][
+                self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][feature_index][
                     predicate] = self.index
                 self.increment_index()
 
         if not pre_sentence_label and not sentence_label and document_label:
-            for feature_type in feature_types:
+            for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
-                self.sentence_document[document_label][predicate] = self.index
+                self.document[document_label][feature_index][predicate] = self.index
                 self.increment_index()
 
         if not pre_sentence_label and sentence_label and not document_label:
-            for feature_type in feature_types:
+            for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
-                self.sentence[sentence_label][predicate] = self.index
+                self.sentence[sentence_label][feature_index][predicate] = self.index
                 self.increment_index()
 
         if not pre_sentence_label and sentence_label and document_label:
-            for feature_type in feature_types:
+            for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
-                self.sentence_document[(sentence_label, document_label)][
-                    predicate] = self.index
+                self.sentence_document[(sentence_label, document_label)][feature_index][predicate] = self.index
                 self.increment_index()
 
         if pre_sentence_label and sentence_label and not document_label:
-            for feature_type in feature_types:
+            for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
-                self.pre_sentence_sentence[(pre_sentence_label, sentence_label)][
+                self.pre_sentence_sentence[(pre_sentence_label, sentence_label)][feature_index][
                     predicate] = self.index
                 self.increment_index()
 
     def initialize_features(self, model):
-        for document in self.corpus:
+        print("Initializing features")
+        for doc_index, document in enumerate(self.corpus.documents, start=1):
             for sen_index, sentence in enumerate(document.sentences):
                 for index, token in enumerate(sentence.tokens):
                     if sen_index >= 1:
                         if model == STRUCTURED_JOINT:
-                            self.initialize_feature_based_on_label(sentence, index, document[sen_index - 1].label,
-                                                                   sentence.label, document.label)
+                            self.initialize_feature_based_on_label(
+                                sentence, index, document.sentences[sen_index - 1].label, sentence.label, document.label)
 
                         if model in (STRUCTURED_JOINT, SENTENCE_STRUCTURED):
-                                self.initialize_feature_based_on_label(sentence, index,
-                                                                       pre_sentence_label=document[sen_index - 1].label,
-                                                                       sentence_label=sentence.label)
+                                self.initialize_feature_based_on_label(
+                                    sentence, index, pre_sentence_label=document.sentences[sen_index - 1].label,
+                                    sentence_label=sentence.label)
                     if model in (STRUCTURED_JOINT, DOCUMENT_CLASSIFIER):
                         self.initialize_feature_based_on_label(sentence, index, document_label=document.label)
 
@@ -581,19 +632,20 @@ class FeatureVector:
                     if model == STRUCTURED_JOINT:
                         self.initialize_feature_based_on_label(sentence, index, sentence_label=sentence.label,
                                                                document_label=document.label)
+            print("Document #{} initialized features".format(doc_index))
 
     def evaluate_clique_feature_vector(self, document, sen_index, model, document_label=None, sentence_label=None,
                                        pre_sentence_label=None):
-        sentence = document[sen_index]
+        sentence = document.sentences[sen_index]
         document_label = document.label if document_label is None else document_label
         sentence_label = sentence.label if sentence_label is None else sentence_label
-        pre_sentence_label = document[sen_index - 1].label if pre_sentence_label is None else pre_sentence_label
+        pre_sentence_label = document.sentences[sen_index - 1].label if pre_sentence_label is None else pre_sentence_label
 
         evaluated_feature = []
         for index, token in enumerate(sentence.tokens):
-            pre_word = self.pre_word(sentence, index)
-            pre_pre_word = self.pre_pre_word(sentence, index)
-            pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
+            pre_word = self.pre_word(sentence.tokens, index)
+            pre_pre_word = self.pre_pre_word(sentence.tokens, index)
+            pre_pre_tag, pre_tag = self.pre_tags(sentence.tokens, index)
             tag = token.tag
             feature_arguments = [(token.word, tag), tag, (pre_word, pre_tag, token.word, tag),
                                  (pre_tag, token.word, tag), (pre_word, pre_tag, tag), (pre_tag, tag),
@@ -633,7 +685,7 @@ class FeatureVector:
                     if value:
                         evaluated_feature.append(value)
 
-        return np.array(evaluated_feature)
+        return evaluated_feature
 
     def extended_feature_vector(self, evaluated_feature_vector):
         vector = np.zeros(self.count_features())
