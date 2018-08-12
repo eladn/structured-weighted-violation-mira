@@ -37,13 +37,13 @@ def data_exploration(train_set, test_set, comp_set):
 
 def main():
     do_train = True
-    do_test = False
+    do_test = True
 
     k = 10
     mira_iterations = 5
 
-    positive_docs_file = "pos-5.txt"
-    negative_docs_file = "neg-5.txt"
+    positive_docs_file = "pos-50.txt"
+    negative_docs_file = "neg-50.txt"
 
     model = STRUCTURED_JOINT
     model_name = "{}-k{}-iter{}.txt".format(STRUCTURED_JOINT, k, mira_iterations)
@@ -69,9 +69,9 @@ def main():
 
     if do_test:
         if do_train:
-            test = Test(test_set, feature_vector, is_basic=is_basic, v=train.v)
+            test = Test(train_set, feature_vector, model, w=train.w)
         else:
-            test = Test(test_set, feature_vector, is_basic=is_basic)
+            test = Test(train_set, feature_vector, model)
             test.load_model(model_name)
 
         # test.evaluate_exp_v_f()
@@ -80,11 +80,13 @@ def main():
         #     for token in sentence.tokens:
         #         print(token)
         #
-        tagged_test_set = Corpus(test_set_file, is_tagged=True, insert_tags=True, lower=is_lower)
-        print(test.evaluate_model(tagged_test_set))
-        test.print_results_to_file(tagged_test_set, model_name, is_test=True)
-        test.confusion_matrix(tagged_test_set, model_name, is_test=True)
-        test.confusion_matrix_ten_max_errors(model_name, is_test=True)
+        test_set = Corpus()
+        test_set.load_file(positive_docs_file, documents_label=1, insert_sentence_labels=True)
+        test_set.load_file(negative_docs_file, documents_label=-1, insert_sentence_labels=True)
+        print(test.evaluate_model(test_set))
+        # test.print_results_to_file(tagged_test_set, model_name, is_test=True)
+        # test.confusion_matrix(tagged_test_set, model_name, is_test=True)
+        # test.confusion_matrix_ten_max_errors(model_name, is_test=True)
 
 
 if __name__ == "__main__":
