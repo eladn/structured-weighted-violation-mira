@@ -1,5 +1,5 @@
 from classes import Corpus, FeatureVector, Train, Test
-from constants import STRUCTURED_JOINT
+from constants import STRUCTURED_JOINT, SENTENCE_CLASSIFIER
 
 
 def data_exploration(train_set, test_set, comp_set):
@@ -36,7 +36,7 @@ def data_exploration(train_set, test_set, comp_set):
 
 
 def main():
-    do_train = True
+    do_train = False
     do_test = True
 
     k = 10
@@ -45,14 +45,15 @@ def main():
     positive_docs_file = "pos-50.txt"
     negative_docs_file = "neg-50.txt"
 
-    model = STRUCTURED_JOINT
-    model_name = "{}-k{}-iter{}.txt".format(STRUCTURED_JOINT, k, mira_iterations)
+    model = SENTENCE_CLASSIFIER
+    # model = STRUCTURED_JOINT
+    model_name = "{}.txt".format(SENTENCE_CLASSIFIER)
+    # model_name = "{}-k{}-iter{}.txt".format(STRUCTURED_JOINT, k, mira_iterations)
 
     train_set = Corpus()
     train_set.load_file(positive_docs_file, documents_label=1, insert_sentence_labels=True)
     train_set.load_file(negative_docs_file, documents_label=-1, insert_sentence_labels=True)
     # test_set = Corpus(test_set_file, insert_labels=False)
-    # comp_set = Corpus(comp_set_file, is_tagged=False, insert_tags=False)
     # data_exploration(train_set, test_set, comp_set)
 
     feature_vector = FeatureVector(train_set)
@@ -75,7 +76,7 @@ def main():
             test.load_model(model_name)
 
         # test.evaluate_exp_v_f()
-        test.viterbi()
+        test.inference()
         # for sentence in test_set.sentences:
         #     for token in sentence.tokens:
         #         print(token)
@@ -83,7 +84,7 @@ def main():
         test_set = Corpus()
         test_set.load_file(positive_docs_file, documents_label=1, insert_sentence_labels=True)
         test_set.load_file(negative_docs_file, documents_label=-1, insert_sentence_labels=True)
-        print(test.evaluate_model(test_set))
+        print(test.evaluate_model(test_set, model))
         # test.print_results_to_file(tagged_test_set, model_name, is_test=True)
         # test.confusion_matrix(tagged_test_set, model_name, is_test=True)
         # test.confusion_matrix_ten_max_errors(model_name, is_test=True)

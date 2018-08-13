@@ -382,7 +382,16 @@ class Test:
                 bp[k, v_index] = SENTENCE_LABELS[np.argmax(pi_q)]
         return bp, pi
 
-    # def viterbi_on_sentence(self, sentence, s_index):
+    def sentence_predict(self, document, model):
+        best_sentence_score = None
+        for i, sentence in enumerate(document.sentences):
+            for sentence_label in SENTENCE_LABELS:
+                temp_sentence_score = self.sentence_score(document, i, model, document_label=None, sentence_label=sentence_label, pre_sentence_label=None)
+                if best_sentence_score is None or temp_sentence_score > best_sentence_score:
+                    best_sentence_score = temp_sentence_score
+                    sentence.label = sentence_label
+
+                # def viterbi_on_sentence(self, sentence, s_index):
     #     start_time = time.time()
     #     n = sentence.count_tokens()
     #     count_tags = len(TAGS)
@@ -416,8 +425,12 @@ class Test:
     #     print("{0:.3f} seconds".format(time.time() - start_time))
     #     return sentence, s_index
 
-    def viterbi(self):
+    def inference(self):
         start_time = time.time()
+
+        if self.model == SENTENCE_CLASSIFIER:
+            for document in self.corpus.documents:
+                self.sentence_predict(document, self.model)
 
         for i, document in enumerate(self.corpus.documents):
             self.viterbi_on_document(document, i, self.model)
@@ -433,30 +446,44 @@ class Test:
         path = MODELS_PATH
         self.w = np.loadtxt(path + model_name)
 
-    def evaluate_model(self, ground_truth):
-        document_results = {
-            "correct": 0,
-            "errors": 0
-        }
-        sentences_results = {
-            "correct": 0,
-            "errors": 0
-        }
-        for d1, d2 in zip(self.corpus.documents, ground_truth.documents):
+    def evaluate_model(self, ground_truth, model):
+        if model == SENTENCE_CLASSIFIER:
+            sentences_results = {
+                "correct": 0,
+                "errors": 0
+            }
+            for d1, d2 in zip(self.corpus.documents, ground_truth.documents):
+                for s1, s2 in zip(d1.sentences, d2.sentences):
+                    if s1.label == s2.label:
+                        sentences_results["correct"] += 1
+                    else:
+                        sentences_results["errors"] += 1
 
-            if d1.label == d2.label:
-                document_results["correct"] += 1
-            else:
-                document_results["errors"] += 1
+            return sentences_results, sentences_results["correct"] / sum(sentences_results.values())
+        else:
+            document_results = {
+                "correct": 0,
+                "errors": 0
+            }
+            sentences_results = {
+                "correct": 0,
+                "errors": 0
+            }
+            for d1, d2 in zip(self.corpus.documents, ground_truth.documents):
 
-            for s1, s2 in zip(d1.sentences, d2.sentences):
-                if s1.label == s2.label:
-                    sentences_results["correct"] += 1
+                if d1.label == d2.label:
+                    document_results["correct"] += 1
                 else:
-                    sentences_results["errors"] += 1
+                    document_results["errors"] += 1
 
-        return document_results, document_results["correct"] / sum(document_results.values()), \
-            sentences_results, sentences_results["correct"] / sum(sentences_results.values())
+                for s1, s2 in zip(d1.sentences, d2.sentences):
+                    if s1.label == s2.label:
+                        sentences_results["correct"] += 1
+                    else:
+                        sentences_results["errors"] += 1
+
+            return document_results, document_results["correct"] / sum(document_results.values()), \
+                sentences_results, sentences_results["correct"] / sum(sentences_results.values())
 
     # def print_results_to_file(self, tagged_file, model_name, is_test):
     #     if is_test:
@@ -718,8 +745,8 @@ class FeatureVector:
 
         evaluated_feature = []
         for index, token in enumerate(sentence.tokens):
-            pre_word = self.pre_word(sentence.tokens, index)
-            pre_pre_word = self.pre_pre_word(sentence.tokens, index)
+            # pre_word = self.pre_word(sentence.tokens, index)
+            # pre_pre_word = self.pre_pre_word(sentence.tokens, index)
             pre_pre_tag, pre_tag = self.pre_tags(sentence.tokens, index)
             tag = token.tag
             feature_arguments = [tag, (pre_tag, tag), (pre_pre_tag, pre_tag, tag)]
