@@ -1,5 +1,5 @@
 from classes import Corpus, FeatureVector, Train, Test
-from constants import STRUCTURED_JOINT, SENTENCE_CLASSIFIER
+from constants import STRUCTURED_JOINT, SENTENCE_CLASSIFIER, DOCUMENT_CLASSIFIER
 
 
 def data_exploration(train_set, test_set, comp_set):
@@ -36,8 +36,8 @@ def data_exploration(train_set, test_set, comp_set):
 
 
 def main():
-    do_train = False
-    do_test = True
+    do_train = True
+    do_test = False
 
     k = 10
     mira_iterations = 5
@@ -45,7 +45,8 @@ def main():
     positive_docs_file = "pos-50.txt"
     negative_docs_file = "neg-50.txt"
 
-    model = SENTENCE_CLASSIFIER
+    model = DOCUMENT_CLASSIFIER
+    # model = SENTENCE_CLASSIFIER
     # model = STRUCTURED_JOINT
     model_name = "{}.txt".format(SENTENCE_CLASSIFIER)
     # model_name = "{}-k{}-iter{}.txt".format(STRUCTURED_JOINT, k, mira_iterations)
@@ -86,7 +87,7 @@ def main():
         test_set.load_file(negative_docs_file, documents_label=-1, insert_sentence_labels=True)
         print(test.evaluate_model(test_set, model))
         # test.print_results_to_file(tagged_test_set, model_name, is_test=True)
-        # test.confusion_matrix(tagged_test_set, model_name, is_test=True)
+        test.confusion_matrix(test_set, model_name)
         # test.confusion_matrix_ten_max_errors(model_name, is_test=True)
 
 

@@ -265,7 +265,7 @@ class Test:
         if DEBUG:
             if not isinstance(corpus, Corpus):
                 raise Exception('The corpus argument is not a Corpus object')
-        # self.matrix = np.zeros((len(TAGS), len(TAGS)))
+        self.matrix = np.zeros((len(SENTENCE_LABELS), len(SENTENCE_LABELS)))
         self.corpus = corpus
         self.feature_vector = feature_vector
         self.w = w
@@ -368,6 +368,22 @@ class Test:
         print("{0:.3f} seconds".format(time.time() - start_time))
         return document, document_index
 
+    def viterbi_on_sentences(self, document, document_index, model):
+        start_time = time.time()
+
+        n = document.count_sentences()
+        bp, pi = self.viterbi_on_document_label(document, document_label=None, model=model)
+
+        sentence_label = np.where(pi[n - 1] == pi[n - 1].max())
+        document.sentences[n - 1].label = SENTENCE_LABELS[sentence_label[0][0]]
+
+        for k in range(n - 2, -1, -1):
+            document.sentences[k].label = int(bp[k + 1, SENTENCE_LABELS.index(document.sentences[k + 1].label)])
+
+        print("Sentence {} viterbi done".format(document_index))
+        print("{0:.3f} seconds".format(time.time() - start_time))
+        return document, document_index
+
     def viterbi_on_document_label(self, document, document_label, model):
         n = document.count_sentences()
         count_labels = len(SENTENCE_LABELS)
@@ -381,6 +397,19 @@ class Test:
                 pi[k, v_index] = np.amax(pi_q)
                 bp[k, v_index] = SENTENCE_LABELS[np.argmax(pi_q)]
         return bp, pi
+
+    def document_predict(self, corpus, model):
+        best_document_score = None
+        for i, document in enumerate(corpus.documents):
+            for document_label in enumerate(DOCUMENT_LABELS):
+                temp_document_score = 0
+                for i, sentence in enumerate(document.sentences):
+                    temp_document_score = temp_document_score + \
+                                          self.sentence_score(document, i, model, document_label=document_label,
+                                                              sentence_label=None, pre_sentence_label=None)
+                if best_document_score is None or temp_document_score > best_document_score:
+                    best_document_score = temp_document_score
+                    document.label = document_label
 
     def sentence_predict(self, document, model):
         best_sentence_score = None
@@ -428,9 +457,16 @@ class Test:
     def inference(self):
         start_time = time.time()
 
+        if self.model == DOCUMENT_CLASSIFIER:
+            self.document_predict(self.corpus, self.model)
+
         if self.model == SENTENCE_CLASSIFIER:
             for document in self.corpus.documents:
                 self.sentence_predict(document, self.model)
+
+        if self.model == SENTENCE_STRUCTURED:
+            for i, document in enumerate(self.corpus.documents):
+                self.viterbi_on_sentences(document, i , self.model)
 
         for i, document in enumerate(self.corpus.documents):
             self.viterbi_on_document(document, i, self.model)
@@ -485,22 +521,16 @@ class Test:
             return document_results, document_results["correct"] / sum(document_results.values()), \
                 sentences_results, sentences_results["correct"] / sum(sentences_results.values())
 
-    # def print_results_to_file(self, tagged_file, model_name, is_test):
-    #     if is_test:
-    #         path = BASIC_TEST_PATH if self.is_basic else ADVANCED_TEST_PATH
-    #     else:
-    #         path = BASIC_COMP_PATH if self.is_basic else ADVANCED_COMP_PATH
+    # def print_results_to_file(self, tagged_file, model_name):
+    #     path = TEST_PATH
     #
     #     f = open(path + model_name, 'w')
     #     for s_truth, s_eval in zip(tagged_file.sentences, self.corpus.sentences):
     #         f.write(" ".join(["{}_{}".format(t_truth.word, t_eval.tag) for t_truth, t_eval
     #                           in zip(s_truth.tokens, s_eval.tokens)]) + "\n")
 
-    def confusion_matrix(self, ground_truth, model_name, is_test):
-        if is_test:
-            path = TEST_PATH
-        # else:
-        #     path = BASIC_COMP_PATH if self.is_basic else ADVANCED_COMP_PATH
+    def confusion_matrix(self, ground_truth, model_name):
+        path = TEST_PATH
 
         for d1, d2 in zip(self.corpus.documents, ground_truth.documents):
             for s1, s2 in zip(d1.sentences, d2.sentences):
