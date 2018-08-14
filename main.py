@@ -36,8 +36,8 @@ def data_exploration(train_set, test_set, comp_set):
 
 
 def main():
-    do_train = True
-    do_test = False
+    do_train = False
+    do_test = True
 
     k = 10
     mira_iterations = 5
@@ -48,8 +48,7 @@ def main():
     model = DOCUMENT_CLASSIFIER
     # model = SENTENCE_CLASSIFIER
     # model = STRUCTURED_JOINT
-    model_name = "{}.txt".format(SENTENCE_CLASSIFIER)
-    # model_name = "{}-k{}-iter{}.txt".format(STRUCTURED_JOINT, k, mira_iterations)
+    model_name = "{}-k{}-iter{}.txt".format(model, k, mira_iterations)
 
     train_set = Corpus()
     train_set.load_file(positive_docs_file, documents_label=1, insert_sentence_labels=True)

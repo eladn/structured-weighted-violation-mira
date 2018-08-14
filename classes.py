@@ -271,74 +271,6 @@ class Test:
         self.w = w
         self.model = model
 
-    # def evaluate_exp_v_f_on_sentence(self, sentences, b_index):
-    #     evaluated_exp_v_f = {}
-    #     for s_index, sentence in enumerate(sentences):
-    #         for index, token in enumerate(sentence.tokens):
-    #             if self.is_basic:
-    #                 history = token.word
-    #             else:
-    #                 pre_word = self.feature_vector.pre_word(sentence.tokens, index)
-    #                 next_word = self.feature_vector.next_word(sentence.tokens, index)
-    #                 history = (token.word, pre_word, next_word)
-    #
-    #             count_test_tags = len(TEST_TAGS)
-    #             evaluated_exp_v_f[history] = np.ones((count_test_tags, count_test_tags, count_test_tags))
-    #
-    #             for pre_pre_index, pre_pre_tag in enumerate(TEST_TAGS):
-    #                 for pre_index, pre_tag in enumerate(TEST_TAGS):
-    #                     for t_index, tag in enumerate(TEST_TAGS):
-    #                         evaluated_exp_v_f[history][pre_pre_index][pre_index][t_index] = \
-    #                             self.exp_v_f(sentence, index, pre_pre_tag, pre_tag, tag)
-    #         print("test evaluate_exp_v_f_on_sentence {} (batch {}) done".format(s_index, b_index))
-    #
-    #     print("test evaluate_exp_v_f_on_sentence batch {} done".format(b_index))
-    #     return evaluated_exp_v_f
-
-    # def evaluate_exp_v_f(self):
-    #     start_time = time.time()
-    #     splits = PROCESSES * 3
-    #     with Pool(processes=PROCESSES) as pool:
-    #         results = pool.starmap(self.evaluate_exp_v_f_on_sentence,
-    #                                [(s, i) for i, s in enumerate(np.array_split(self.corpus.sentences, splits))])
-    #     for r in results:
-    #         for history, exp_v_f in r.items():
-    #             if history not in self.evaluated_exp_v_f:
-    #                 self.evaluated_exp_v_f[history] = exp_v_f
-    #
-    #     print("evaluate_exp_v_f done: {0:.3f} seconds".format(time.time() - start_time))
-
-    # def predefined_exp_v_f(self, sentence, index, pre_pre_tag, pre_tag, tag):
-    #     token = sentence.tokens[index]
-    #     pre_pre_index = TEST_TAGS.index(pre_pre_tag)
-    #     pre_index = TEST_TAGS.index(pre_tag)
-    #     t_index = TEST_TAGS.index(tag)
-    #     if self.is_basic:
-    #         return self.evaluated_exp_v_f[token.word][pre_pre_index][pre_index][t_index]
-    #     pre_word = self.feature_vector.pre_word(sentence.tokens, index)
-    #     next_word = self.feature_vector.next_word(sentence.tokens, index)
-    #     return self.evaluated_exp_v_f[(token.word, pre_word, next_word)][pre_pre_index][pre_index][t_index]
-
-    # def v_f(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
-    #     if self.is_basic:
-    #         f = self.feature_vector.evaluate_basic_feature_vector(sentence.tokens, index,
-    #                                                               pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag)
-    #     else:
-    #         f = self.feature_vector.evaluate_advanced_feature_vector(sentence.tokens, index,
-    #                                                                  pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag)
-    #     return np.take(self.v, f).sum() if f.size > 0 else 0
-    #
-    # def exp_v_f(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
-    #     return np.exp(self.v_f(sentence, index, pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag))
-    #
-    # def sum_exp_v_f(self, sentence, index, pre_pre_tag=None, pre_tag=None):
-    #     return np.array(
-    #         [self.exp_v_f(sentence, index, pre_pre_tag=pre_pre_tag, pre_tag=pre_tag, tag=tag) for tag in TAGS]).sum()
-
-    # def q(self, sentence, index, pre_pre_tag=None, pre_tag=None, tag=None):
-    #     return self.exp_v_f(sentence, index, pre_pre_tag, pre_tag, tag) / \
-    #            self.sum_exp_v_f(sentence, index, pre_pre_tag, pre_tag)
-
     def sentence_score(self, document, sen_index, model, document_label, sentence_label, pre_sentence_label):
         fv = self.feature_vector.evaluate_clique_feature_vector(document, sen_index, model,
                                                                 document_label=document_label,
@@ -400,15 +332,15 @@ class Test:
 
     def document_predict(self, corpus, model):
         best_document_score = None
-        for i, document in enumerate(corpus.documents):
-            for document_label in enumerate(DOCUMENT_LABELS):
-                temp_document_score = 0
+        for document in corpus.documents:
+            for document_label in DOCUMENT_LABELS:
+                sum_document_score = 0
                 for i, sentence in enumerate(document.sentences):
-                    temp_document_score = temp_document_score + \
-                                          self.sentence_score(document, i, model, document_label=document_label,
-                                                              sentence_label=None, pre_sentence_label=None)
-                if best_document_score is None or temp_document_score > best_document_score:
-                    best_document_score = temp_document_score
+                    sum_document_score = sum_document_score + \
+                                         self.sentence_score(document, i, model, document_label=document_label,
+                                                             sentence_label=None, pre_sentence_label=None)
+                if best_document_score is None or sum_document_score > best_document_score:
+                    best_document_score = sum_document_score
                     document.label = document_label
 
     def sentence_predict(self, document, model):
@@ -419,40 +351,6 @@ class Test:
                 if best_sentence_score is None or temp_sentence_score > best_sentence_score:
                     best_sentence_score = temp_sentence_score
                     sentence.label = sentence_label
-
-                # def viterbi_on_sentence(self, sentence, s_index):
-    #     start_time = time.time()
-    #     n = sentence.count_tokens()
-    #     count_tags = len(TAGS)
-    #     pi = np.zeros((n, count_tags, count_tags))
-    #     bp = np.ndarray(shape=(n, count_tags, count_tags), dtype=object)
-    #     bp[:] = None
-    #     pi[0, 0, :] = np.array([self.q(sentence, 0, "*", "*", tag) for tag in TAGS])
-    #     bp[0, 0, :] = "*"
-    #     for k, token in enumerate(sentence.tokens[1:], 1):
-    #         print("Token: {}".format(k))
-    #         for u_index, u in enumerate(TAGS):
-    #             tags = TAGS if k != 1 else ["*"]
-    #             denominators = np.array([self.sum_exp_v_f(sentence, k, t, u) for t in tags])
-    #             for v_index, v in enumerate(TAGS):
-    #                 pi_q = [self.exp_v_f(sentence, k, t, u, v) / denominators[t_index] * pi[
-    #                     k - 1, t_index, u_index] for t_index, t in enumerate(tags)]
-    #                 pi[k, u_index, v_index] = np.amax(pi_q)
-    #                 bp[k, u_index, v_index] = TAGS[np.argmax(pi_q)] if k != 1 else "*"
-    #
-    #     pre_tag, tag = np.where(pi[n - 1] == pi[n - 1].max())
-    #
-    #     sentence.tokens[n - 2].tag = TAGS[pre_tag[0]]
-    #     sentence.tokens[n - 1].tag = TAGS[tag[0]]
-    #
-    #     for k in range(n - 3, -1, -1):
-    #         sentence.tokens[k].tag = bp[k + 2,
-    #                                     TAGS.index(sentence.tokens[k + 1].tag),
-    #                                     TAGS.index(sentence.tokens[k + 2].tag)]
-    #
-    #     print("Sentence {} viterbi done".format(s_index))
-    #     print("{0:.3f} seconds".format(time.time() - start_time))
-    #     return sentence, s_index
 
     def inference(self):
         start_time = time.time()
@@ -468,8 +366,9 @@ class Test:
             for i, document in enumerate(self.corpus.documents):
                 self.viterbi_on_sentences(document, i , self.model)
 
-        for i, document in enumerate(self.corpus.documents):
-            self.viterbi_on_document(document, i, self.model)
+        if self.model == STRUCTURED_JOINT:
+            for i, document in enumerate(self.corpus.documents):
+                self.viterbi_on_document(document, i, self.model)
 
         # with Pool(processes=PROCESSES) as pool:
         #     results = pool.starmap(self.viterbi_on_document, [(d, i) for i, s in enumerate(self.corpus.documents)])
@@ -578,40 +477,40 @@ class FeatureVector:
         self.sentence_document = {}
         self.pre_sentence_sentence = {}
         self.pre_sentence_sentence_document = {}
-        for i in range(1, 4):
-            self.document[1][i] = {}
-            self.document[-1][i] = {}
-        # for i in range(1, 15):
+        # for i in range(1, 4):
         #     self.document[1][i] = {}
         #     self.document[-1][i] = {}
+        for i in range(1, 15):
+            self.document[1][i] = {}
+            self.document[-1][i] = {}
         for i in [-1, 1]:
             self.sentence[i] = {}
-            for j in range(1, 4):
-                self.sentence[i][j] = {}
-            # for j in range(1, 15):
+            # for j in range(1, 4):
             #     self.sentence[i][j] = {}
+            for j in range(1, 15):
+                self.sentence[i][j] = {}
         for i in [-1, 1]:
             for j in [-1, 1]:
                 self.sentence_document[(i, j)] = {}
-                for k in range(1, 4):
-                    self.sentence_document[(i, j)][k] = {}
-                # for k in range(1, 15):
+                # for k in range(1, 4):
                 #     self.sentence_document[(i, j)][k] = {}
+                for k in range(1, 15):
+                    self.sentence_document[(i, j)][k] = {}
         for i in [-1, 1]:
             for j in [-1, 1]:
                 self.pre_sentence_sentence[(i, j)] = {}
-                for k in range(1, 4):
-                    self.pre_sentence_sentence[(i, j)][k] = {}
-                # for k in range(1, 15):
+                # for k in range(1, 4):
                 #     self.pre_sentence_sentence[(i, j)][k] = {}
+                for k in range(1, 15):
+                    self.pre_sentence_sentence[(i, j)][k] = {}
         for i in [-1, 1]:
             for j in [-1, 1]:
                 for d in [-1, 1]:
                     self.pre_sentence_sentence_document[(i, j, d)] = {}
-                    for k in range(1, 4):
-                        self.pre_sentence_sentence_document[(i, j, d)][k] = {}
-                    # for k in range(1, 15):
+                    # for k in range(1, 4):
                     #     self.pre_sentence_sentence_document[(i, j, d)][k] = {}
+                    for k in range(1, 15):
+                        self.pre_sentence_sentence_document[(i, j, d)][k] = {}
 
         self.index = 0
 
@@ -632,65 +531,65 @@ class FeatureVector:
     def next_word(self, sentence, index):
         return sentence[index + 1].word if index != len(sentence) - 1 else "*"
 
-    # def f_1_word_tag(self, sentence, index):
-    #     return sentence[index].word, sentence[index].tag
+    def f_1_word_tag(self, sentence, index):
+        return sentence[index].word, sentence[index].tag
 
     def f_2_tag(self, sentence, index):
         return sentence[index].tag
 
-    # def f_3_bigram(self, sentence, index):
-    #     _, pre_tag = self.pre_tags(sentence, index)
-    #     pre_word = self.pre_word(sentence, index)
-    #     return pre_word, pre_tag, sentence[index].word, sentence[index].tag
+    def f_3_bigram(self, sentence, index):
+        _, pre_tag = self.pre_tags(sentence, index)
+        pre_word = self.pre_word(sentence, index)
+        return pre_word, pre_tag, sentence[index].word, sentence[index].tag
 
-    # def f_4_bigram_none(self, sentence, index):
-    #     _, pre_tag = self.pre_tags(sentence, index)
-    #     return pre_tag, sentence[index].word, sentence[index].tag
+    def f_4_bigram_none(self, sentence, index):
+        _, pre_tag = self.pre_tags(sentence, index)
+        return pre_tag, sentence[index].word, sentence[index].tag
 
-    # def f_5_bigram_none(self, sentence, index):
-    #     _, pre_tag = self.pre_tags(sentence, index)
-    #     pre_word = self.pre_word(sentence, index)
-    #     return pre_word, pre_tag, sentence[index].tag
+    def f_5_bigram_none(self, sentence, index):
+        _, pre_tag = self.pre_tags(sentence, index)
+        pre_word = self.pre_word(sentence, index)
+        return pre_word, pre_tag, sentence[index].tag
 
     def f_6_bigram_none_none(self, sentence, index):
         _, pre_tag = self.pre_tags(sentence, index)
         return pre_tag, sentence[index].tag
 
-    # def f_7_trigram(self, sentence, index):
-    #     pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
-    #     pre_word = self.pre_word(sentence, index)
-    #     pre_pre_word = self.pre_pre_word(sentence, index)
-    #     return pre_pre_word, pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag
+    def f_7_trigram(self, sentence, index):
+        pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
+        pre_word = self.pre_word(sentence, index)
+        pre_pre_word = self.pre_pre_word(sentence, index)
+        return pre_pre_word, pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag
 
-    # def f_8_trigram_pre_pre_none(self, sentence, index):
-    #     pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
-    #     pre_word = self.pre_word(sentence, index)
-    #     return pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag
+    def f_8_trigram_pre_pre_none(self, sentence, index):
+        pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
+        pre_word = self.pre_word(sentence, index)
+        return pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag
 
-    # def f_9_trigram_pre_none(self, sentence, index):
-    #     pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
-    #     pre_pre_word = self.pre_pre_word(sentence, index)
-    #     return pre_pre_word, pre_pre_tag, pre_tag, sentence[index].word, sentence[index].tag
+    def f_9_trigram_pre_none(self, sentence, index):
+        pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
+        pre_pre_word = self.pre_pre_word(sentence, index)
+        return pre_pre_word, pre_pre_tag, pre_tag, sentence[index].word, sentence[index].tag
 
-    # def f_10_trigram_pre_none(self, sentence, index):
-    #     pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
-    #     pre_word = self.pre_word(sentence, index)
-    #     pre_pre_word = self.pre_pre_word(sentence, index)
-    #     return pre_pre_word, pre_pre_tag, pre_word, pre_tag, sentence[index].tag
+    def f_10_trigram_pre_none(self, sentence, index):
+        pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
+        pre_word = self.pre_word(sentence, index)
+        pre_pre_word = self.pre_pre_word(sentence, index)
+        return pre_pre_word, pre_pre_tag, pre_word, pre_tag, sentence[index].tag
 
-    # def f_11_trigram_pre_pre_none_pre_none(self, sentence, index):
-    #     pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
-    #     return pre_pre_tag, pre_tag, sentence[index].word, sentence[index].tag
+    def f_11_trigram_pre_pre_none_pre_none(self, sentence, index):
+        pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
+        return pre_pre_tag, pre_tag, sentence[index].word, sentence[index].tag
 
-    # def f_12_trigram_pre_pre_none_none(self, sentence, index):
-    #     pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
-    #     pre_word = self.pre_word(sentence, index)
-    #     return pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag
+    def f_12_trigram_pre_pre_none_none(self, sentence, index):
+        pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
+        pre_word = self.pre_word(sentence, index)
+        return pre_pre_tag, pre_word, pre_tag, sentence[index].word, sentence[index].tag
 
-    # def f_13_trigram_pre_none_none(self, sentence, index):
-    #     pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
-    #     pre_pre_word = self.pre_pre_word(sentence, index)
-    #     return pre_pre_word, pre_pre_tag, pre_tag, sentence[index].tag
+    def f_13_trigram_pre_none_none(self, sentence, index):
+        pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
+        pre_pre_word = self.pre_pre_word(sentence, index)
+        return pre_pre_word, pre_pre_tag, pre_tag, sentence[index].tag
 
     def f_14_trigram_none_none_none(self, sentence, index):
         pre_pre_tag, pre_tag = self.pre_tags(sentence, index)
@@ -698,43 +597,52 @@ class FeatureVector:
 
     def initialize_feature_based_on_label(self, sentence, index, pre_sentence_label=None, sentence_label=None,
                                           document_label=None):
-        feature_types = ["f_2_tag", "f_6_bigram_none_none", "f_14_trigram_none_none_none"]
+        # feature_types = ["f_2_tag", "f_6_bigram_none_none", "f_14_trigram_none_none_none"]
 
-        # feature_types = ["f_1_word_tag", "f_2_tag", "f_3_bigram", "f_4_bigram_none", "f_5_bigram_none",
-        #                  "f_6_bigram_none_none",
-        #                  "f_7_trigram", "f_8_trigram_pre_pre_none", "f_9_trigram_pre_none", "f_10_trigram_pre_none",
-        #                  "f_11_trigram_pre_pre_none_pre_none", "f_12_trigram_pre_pre_none_none",
-        #                  "f_13_trigram_pre_none_none",
-        #                  "f_14_trigram_none_none_none"]
+        feature_types = ["f_1_word_tag", "f_2_tag", "f_3_bigram", "f_4_bigram_none", "f_5_bigram_none",
+                         "f_6_bigram_none_none",
+                         "f_7_trigram", "f_8_trigram_pre_pre_none", "f_9_trigram_pre_none", "f_10_trigram_pre_none",
+                         "f_11_trigram_pre_pre_none_pre_none", "f_12_trigram_pre_pre_none_none",
+                         "f_13_trigram_pre_none_none",
+                         "f_14_trigram_none_none_none"]
         if pre_sentence_label and sentence_label and document_label:
             for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
+                if predicate in self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][feature_index]:
+                    break
                 self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][
-                    feature_index][
-                    predicate] = self.index
+                    feature_index][predicate] = self.index
                 self.increment_index()
 
         if not pre_sentence_label and not sentence_label and document_label:
             for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
+                if predicate in self.document[document_label][feature_index]:
+                    break
                 self.document[document_label][feature_index][predicate] = self.index
                 self.increment_index()
 
         if not pre_sentence_label and sentence_label and not document_label:
             for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
+                if predicate in self.sentence[sentence_label][feature_index]:
+                    break
                 self.sentence[sentence_label][feature_index][predicate] = self.index
                 self.increment_index()
 
         if not pre_sentence_label and sentence_label and document_label:
             for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
+                if predicate in self.sentence_document[(sentence_label, document_label)][feature_index]:
+                    break
                 self.sentence_document[(sentence_label, document_label)][feature_index][predicate] = self.index
                 self.increment_index()
 
         if pre_sentence_label and sentence_label and not document_label:
             for feature_index, feature_type in enumerate(feature_types, start=1):
                 predicate = getattr(self, feature_type)(sentence.tokens, index)
+                if predicate in self.pre_sentence_sentence[(pre_sentence_label, sentence_label)][feature_index]:
+                    break
                 self.pre_sentence_sentence[(pre_sentence_label, sentence_label)][feature_index][
                     predicate] = self.index
                 self.increment_index()
@@ -775,21 +683,21 @@ class FeatureVector:
 
         evaluated_feature = []
         for index, token in enumerate(sentence.tokens):
-            # pre_word = self.pre_word(sentence.tokens, index)
-            # pre_pre_word = self.pre_pre_word(sentence.tokens, index)
+            pre_word = self.pre_word(sentence.tokens, index)
+            pre_pre_word = self.pre_pre_word(sentence.tokens, index)
             pre_pre_tag, pre_tag = self.pre_tags(sentence.tokens, index)
             tag = token.tag
-            feature_arguments = [tag, (pre_tag, tag), (pre_pre_tag, pre_tag, tag)]
+            # feature_arguments = [tag, (pre_tag, tag), (pre_pre_tag, pre_tag, tag)]
             #
-            # feature_arguments = [(token.word, tag), tag, (pre_word, pre_tag, token.word, tag),
-            #                      (pre_tag, token.word, tag), (pre_word, pre_tag, tag), (pre_tag, tag),
-            #                      (pre_pre_word, pre_pre_tag, pre_word, pre_tag, token.word, tag),
-            #                      (pre_pre_tag, pre_word, pre_tag, token.word, tag),
-            #                      (pre_pre_word, pre_pre_tag, pre_tag, token.word, tag),
-            #                      (pre_pre_word, pre_pre_tag, pre_word, pre_tag, tag),
-            #                      (pre_pre_tag, pre_tag, token.word, tag),
-            #                      (pre_pre_tag, pre_word, pre_tag, token.word, tag),
-            #                      (pre_pre_word, pre_pre_tag, pre_tag, tag), (pre_pre_tag, pre_tag, tag)]
+            feature_arguments = [(token.word, tag), tag, (pre_word, pre_tag, token.word, tag),
+                                 (pre_tag, token.word, tag), (pre_word, pre_tag, tag), (pre_tag, tag),
+                                 (pre_pre_word, pre_pre_tag, pre_word, pre_tag, token.word, tag),
+                                 (pre_pre_tag, pre_word, pre_tag, token.word, tag),
+                                 (pre_pre_word, pre_pre_tag, pre_tag, token.word, tag),
+                                 (pre_pre_word, pre_pre_tag, pre_word, pre_tag, tag),
+                                 (pre_pre_tag, pre_tag, token.word, tag),
+                                 (pre_pre_tag, pre_word, pre_tag, token.word, tag),
+                                 (pre_pre_word, pre_pre_tag, pre_tag, tag), (pre_pre_tag, pre_tag, tag)]
 
             if model in (STRUCTURED_JOINT, DOCUMENT_CLASSIFIER):
                 for f_index, arguments in enumerate(feature_arguments):
