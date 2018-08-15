@@ -1,9 +1,7 @@
 DEBUG = True
 
-PROCESSES = 8
-
-DOCUMENT_LABELS = [1, -1]
-SENTENCE_LABELS = [1, -1]
+DOCUMENT_LABELS = [-1, 1]
+SENTENCE_LABELS = [-1, 1]
 
 STRUCTURED_JOINT = "structured-joint"
 DOCUMENT_CLASSIFIER = "document-classifier"

@@ -1,20 +1,17 @@
 import re
-from multiprocessing.pool import Pool
 
 import random
 from scipy import sparse
 
-import cvxopt
 import numpy as np
 import time
 
 from qpsolvers import solve_qp
-from scipy.optimize import minimize
-from scipy.sparse import csr_matrix, hstack
+from scipy.sparse import csr_matrix
 from sklearn.metrics import hamming_loss, zero_one_loss
 
 from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
-    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, PROCESSES, TEST_PATH
+    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, TEST_PATH
 
 
 class Corpus:
@@ -176,8 +173,8 @@ class Train:
         y_document = y_tag[0] if y_tag is not None else None
         row_ind, col_ind = [], []
         for sentence_index, sentence in enumerate(document.sentences[1:], start=1):  # TODO
-            y_sentence = y_tag[sentence_index] if y_tag is not None else None
-            y_pre_sentence = y_tag[sentence_index - 1] if y_tag is not None else None
+            y_sentence = y_tag[sentence_index + 1] if y_tag is not None else None
+            y_pre_sentence = y_tag[sentence_index] if y_tag is not None else None
             feature_indices = self.feature_vector.evaluate_clique_feature_vector(document, sentence_index, self.model,
                                                                                  y_document, y_sentence, y_pre_sentence)
             col_ind += feature_indices
@@ -199,35 +196,11 @@ class Train:
         for i in range(iterations):
             for document, feature_vectors in zip(self.corpus.documents, self.evaluated_feature_vectors):
                 c = self.extract_random_labeling_subset(document, k)
-                # minimize(fun=self.loss, x0=np.zeros(self.w.shape), method='SLSQP',
-                #          args=(np.copy(self.w),), jac=self.gradient,
-                #          constraints=self.optimization_constraints(document, feature_vectors, document.y(), c),
-                #          options={"disp": True})
-                # return
 
                 self.w = solve_qp(*self.extract_qp_matrices(document, feature_vectors, document.y(), c), solver="osqp")
         print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
 
-    # def optimization_constraints(self, document, feature_vectors, y, c):
-    #     y_fv = feature_vectors.sum(axis=0)
-    #     y_fv = np.asarray(y_fv).reshape((y_fv.shape[1],))
-    #     G = []
-    #     h = []
-    #     for y_tag in c:
-    #         y_tag_fv = self.evaluate_document_feature_vector(document, y_tag).sum(axis=0)
-    #         y_tag_fv = np.asarray(y_tag_fv).reshape((y_tag_fv.shape[1],))
-    #         G.append(y_tag_fv - y_fv)
-    #         h.append(-hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]]))
-    #     G = np.array(G)
-    #     h = np.array(h)
-    #     return {
-    #         'type': 'ineq',
-    #         'fun': lambda w: np.dot(G, w) - h,
-    #         'jac': lambda w: G
-    #     }
-
     def extract_qp_matrices(self, document, feature_vectors, y, c):
-        # M = cvxopt.spmatrix(np.ones(count_features), np.arange(count_features), np.arange(count_features))
         M = sparse.eye(self.feature_vector.count_features())
         q = np.copy(self.w)
         y_fv = feature_vectors.sum(axis=0)
@@ -236,7 +209,7 @@ class Train:
         h = []
         for y_tag in c:
             y_tag_fv = self.evaluate_document_feature_vector(document, y_tag).sum(axis=0)
-            y_tag_fv = np.asarray(y_tag_fv)  # .reshape((y_tag_fv.shape[1],))
+            y_tag_fv = np.asarray(y_tag_fv)
             if G is None:
                 G = y_tag_fv - y_fv
             else:
@@ -247,7 +220,7 @@ class Train:
         return M, q.reshape((self.feature_vector.count_features()), ), G, h
 
     @staticmethod
-    def extract_random_labeling_subset(document, k):
+    def extract_random_labeling_subset(document, k):  # TODO use viterbi to find the best c
         return [
             [random.choice(DOCUMENT_LABELS)] +
             [random.choice(SENTENCE_LABELS) for _ in range(document.count_sentences())]
@@ -306,8 +279,8 @@ class Test:
         n = document.count_sentences()
         bp, pi = self.viterbi_on_document_label(document, document_label=None, model=model)
 
-        sentence_label = np.where(pi[n - 1] == pi[n - 1].max())
-        document.sentences[n - 1].label = SENTENCE_LABELS[sentence_label[0][0]]
+        last_sentence_label_index = np.where(pi[n - 1] == pi[n - 1].max())
+        document.sentences[n - 1].label = SENTENCE_LABELS[last_sentence_label_index[0][0]]
 
         for k in range(n - 2, -1, -1):
             document.sentences[k].label = int(bp[k + 1, SENTENCE_LABELS.index(document.sentences[k + 1].label)])
@@ -321,13 +294,16 @@ class Test:
         count_labels = len(SENTENCE_LABELS)
         pi = np.zeros((n, count_labels))
         bp = np.zeros((n, count_labels))
-        for k, sentence in enumerate(document.sentences[1:], start=1):
+        for k, sentence in enumerate(document.sentences):
             print("Sentence: {}".format(k))
             for v_index, v in enumerate(SENTENCE_LABELS):
-                pi_q = [self.sentence_score(document, k, model, document_label, v, t) + pi[
-                    k - 1, t_index] for t_index, t in enumerate(SENTENCE_LABELS)]
-                pi[k, v_index] = np.amax(pi_q)
-                bp[k, v_index] = SENTENCE_LABELS[np.argmax(pi_q)]
+                if k == 0:
+                    pi[k, v_index] = self.sentence_score(document, k, model, document_label, v, pre_sentence_label=None)
+                else:
+                    pi_q = [self.sentence_score(document, k, model, document_label, v, t) + pi[k - 1, t_index]
+                            for t_index, t in enumerate(SENTENCE_LABELS)]
+                    pi[k, v_index] = np.amax(pi_q)
+                    bp[k, v_index] = SENTENCE_LABELS[np.argmax(pi_q)]
         return bp, pi
 
     def document_predict(self, corpus, model):
@@ -358,24 +334,19 @@ class Test:
         if self.model == DOCUMENT_CLASSIFIER:
             self.document_predict(self.corpus, self.model)
 
-        if self.model == SENTENCE_CLASSIFIER:
+        elif self.model == SENTENCE_CLASSIFIER:
             for document in self.corpus.documents:
                 self.sentence_predict(document, self.model)
 
-        if self.model == SENTENCE_STRUCTURED:
+        elif self.model == SENTENCE_STRUCTURED:
             for i, document in enumerate(self.corpus.documents):
-                self.viterbi_on_sentences(document, i , self.model)
+                self.viterbi_on_sentences(document, i, self.model)
 
-        if self.model == STRUCTURED_JOINT:
+        elif self.model == STRUCTURED_JOINT:
             for i, document in enumerate(self.corpus.documents):
                 self.viterbi_on_document(document, i, self.model)
 
-        # with Pool(processes=PROCESSES) as pool:
-        #     results = pool.starmap(self.viterbi_on_document, [(d, i) for i, s in enumerate(self.corpus.documents)])
-        # for document, d_index in results:
-        #     self.corpus.documents[d_index] = document
-
-        print("viterbi done: {0:.3f} seconds".format(time.time() - start_time))
+        print("inference done: {0:.3f} seconds".format(time.time() - start_time))
 
     def load_model(self, model_name):
         path = MODELS_PATH
@@ -597,8 +568,6 @@ class FeatureVector:
 
     def initialize_feature_based_on_label(self, sentence, index, pre_sentence_label=None, sentence_label=None,
                                           document_label=None):
-        # feature_types = ["f_2_tag", "f_6_bigram_none_none", "f_14_trigram_none_none_none"]
-
         feature_types = ["f_1_word_tag", "f_2_tag", "f_3_bigram", "f_4_bigram_none", "f_5_bigram_none",
                          "f_6_bigram_none_none",
                          "f_7_trigram", "f_8_trigram_pre_pre_none", "f_9_trigram_pre_none", "f_10_trigram_pre_none",
@@ -665,7 +634,7 @@ class FeatureVector:
                     if model in (STRUCTURED_JOINT, DOCUMENT_CLASSIFIER):
                         self.initialize_feature_based_on_label(sentence, index, document_label=document.label)
 
-                    if model in (STRUCTURED_JOINT, SENTENCE_CLASSIFIER):
+                    if model in (STRUCTURED_JOINT, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED):
                         self.initialize_feature_based_on_label(sentence, index, sentence_label=sentence.label)
 
                     if model == STRUCTURED_JOINT:
@@ -678,8 +647,11 @@ class FeatureVector:
         sentence = document.sentences[sen_index]
         document_label = document.label if document_label is None else document_label
         sentence_label = sentence.label if sentence_label is None else sentence_label
-        pre_sentence_label = document.sentences[
-            sen_index - 1].label if pre_sentence_label is None else pre_sentence_label
+        if sen_index == 0:
+            pre_sentence_label = None
+        else:
+            pre_sentence_label = document.sentences[
+                sen_index - 1].label if pre_sentence_label is None else pre_sentence_label
 
         evaluated_feature = []
         for index, token in enumerate(sentence.tokens):
@@ -705,7 +677,7 @@ class FeatureVector:
                     if value:
                         evaluated_feature.append(value)
 
-            if model in (STRUCTURED_JOINT, SENTENCE_CLASSIFIER):
+            if model in (STRUCTURED_JOINT, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED):
                 for f_index, arguments in enumerate(feature_arguments):
                     value = self.sentence[sentence_label][f_index + 1].get(arguments)
                     if value:
@@ -713,9 +685,10 @@ class FeatureVector:
 
             if model in (STRUCTURED_JOINT, SENTENCE_STRUCTURED):
                 for f_index, arguments in enumerate(feature_arguments):
-                    value = self.pre_sentence_sentence[(pre_sentence_label, sentence_label)][f_index + 1].get(arguments)
-                    if value:
-                        evaluated_feature.append(value)
+                    if pre_sentence_label:
+                        value = self.pre_sentence_sentence[(pre_sentence_label, sentence_label)][f_index + 1].get(arguments)
+                        if value:
+                            evaluated_feature.append(value)
 
             if model == STRUCTURED_JOINT:
                 for f_index, arguments in enumerate(feature_arguments):

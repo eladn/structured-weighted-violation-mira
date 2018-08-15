@@ -1,5 +1,5 @@
 from classes import Corpus, FeatureVector, Train, Test
-from constants import STRUCTURED_JOINT, SENTENCE_CLASSIFIER, DOCUMENT_CLASSIFIER
+from constants import STRUCTURED_JOINT, SENTENCE_CLASSIFIER, DOCUMENT_CLASSIFIER, SENTENCE_STRUCTURED
 
 
 def data_exploration(train_set, test_set, comp_set):
@@ -45,9 +45,10 @@ def main():
     positive_docs_file = "pos-50.txt"
     negative_docs_file = "neg-50.txt"
 
-    model = DOCUMENT_CLASSIFIER
+    # model = DOCUMENT_CLASSIFIER
     # model = SENTENCE_CLASSIFIER
-    # model = STRUCTURED_JOINT
+    # model = STRUCTURED_JOINNT
+    model = SENTENCE_STRUCTURED
     model_name = "{}-k{}-iter{}.txt".format(model, k, mira_iterations)
 
     train_set = Corpus()
