@@ -7,6 +7,8 @@ STRUCTURED_JOINT = "structured-joint"
 DOCUMENT_CLASSIFIER = "document-classifier"
 SENTENCE_CLASSIFIER = "sentence-classifier"
 SENTENCE_STRUCTURED = "sentence-structured"
+MODELS = (STRUCTURED_JOINT, DOCUMENT_CLASSIFIER,
+          SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED)
 
 DATA_PATH = "./data/"
 MODELS_PATH = "./models/"

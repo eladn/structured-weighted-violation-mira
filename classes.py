@@ -11,7 +11,9 @@ from scipy.sparse import csr_matrix
 from sklearn.metrics import hamming_loss, zero_one_loss
 
 from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
-    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, TEST_PATH
+    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, MODELS, TEST_PATH
+
+from utils import ProgressBar
 
 
 class Corpus:
@@ -66,7 +68,7 @@ class Document:
 
 
 class Sentence:
-    def __init__(self, sentence, insert_sec_labels):
+    def __init__(self, sentence: str, insert_sec_labels):
         self.tokens = []
         splitted_sec = sentence.split("\t")
         if insert_sec_labels:
@@ -143,6 +145,7 @@ class TaggedWord:
 
 class Train:
     def __init__(self, corpus, feature_vector, model):
+        assert model in MODELS
         if DEBUG:
             if not isinstance(corpus, Corpus):
                 raise Exception('The corpus argument is not a Corpus object')
@@ -193,11 +196,14 @@ class Train:
         optimization_time = time.time()
         print("Training model: {}, k = {}, iterations = {}".format(self.model, k, iterations))
         print("------------------------------------")
+        pb = ProgressBar(iterations * len(self.corpus.documents))
         for i in range(iterations):
             for document, feature_vectors in zip(self.corpus.documents, self.evaluated_feature_vectors):
+                pb.start_next_task()
                 c = self.extract_random_labeling_subset(document, k)
 
                 self.w = solve_qp(*self.extract_qp_matrices(document, feature_vectors, document.y(), c), solver="osqp")
+        pb.finish()
         print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
 
     def extract_qp_matrices(self, document, feature_vectors, y, c):
@@ -226,15 +232,16 @@ class Train:
             [random.choice(SENTENCE_LABELS) for _ in range(document.count_sentences())]
             for _ in range(k)]
 
-    def save_model(self, model_name):
+    def save_model(self, model_name: str):
         np.savetxt(MODELS_PATH + model_name, self.w)
 
-    def load_model(self, model_name):
+    def load_model(self, model_name: str):
         self.w = np.loadtxt(MODELS_PATH + model_name)
 
 
 class Test:
     def __init__(self, corpus, feature_vector, model, w=None):
+        assert model in MODELS
         if DEBUG:
             if not isinstance(corpus, Corpus):
                 raise Exception('The corpus argument is not a Corpus object')
@@ -244,14 +251,20 @@ class Test:
         self.w = w
         self.model = model
 
-    def sentence_score(self, document, sen_index, model, document_label, sentence_label, pre_sentence_label):
+    def sentence_score(self, document: Document, sen_index: int, model, document_label, sentence_label, pre_sentence_label):
+        assert model in MODELS
+        assert sentence_label in SENTENCE_LABELS
+        assert document_label is None or document_label in DOCUMENT_LABELS
+        assert pre_sentence_label is None or pre_sentence_label in SENTENCE_LABELS
         fv = self.feature_vector.evaluate_clique_feature_vector(document, sen_index, model,
                                                                 document_label=document_label,
                                                                 sentence_label=sentence_label,
                                                                 pre_sentence_label=pre_sentence_label)
         return np.sum(np.take(self.w, fv))
 
-    def viterbi_on_document(self, document, document_index, model):
+    def viterbi_on_document(self, document: Document, document_index: int, model):
+        assert model in MODELS
+
         start_time = time.time()
 
         n = document.count_sentences()
@@ -273,7 +286,9 @@ class Test:
         print("{0:.3f} seconds".format(time.time() - start_time))
         return document, document_index
 
-    def viterbi_on_sentences(self, document, document_index, model):
+    def viterbi_on_sentences(self, document: Document, document_index: int, model):
+        assert model in MODELS
+
         start_time = time.time()
 
         n = document.count_sentences()
@@ -285,11 +300,14 @@ class Test:
         for k in range(n - 2, -1, -1):
             document.sentences[k].label = int(bp[k + 1, SENTENCE_LABELS.index(document.sentences[k + 1].label)])
 
-        print("Sentence {} viterbi done".format(document_index))
+        print("Viterbi on sentences over document #{} done".format(document_index))
         print("{0:.3f} seconds".format(time.time() - start_time))
         return document, document_index
 
-    def viterbi_on_document_label(self, document, document_label, model):
+    def viterbi_on_document_label(self, document: Document, document_label, model):
+        assert model in MODELS
+        assert document_label is None or document_label in DOCUMENT_LABELS
+
         n = document.count_sentences()
         count_labels = len(SENTENCE_LABELS)
         pi = np.zeros((n, count_labels))

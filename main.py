@@ -42,12 +42,12 @@ def main():
     k = 10
     mira_iterations = 5
 
-    positive_docs_file = "pos-50.txt"
-    negative_docs_file = "neg-50.txt"
+    positive_docs_file = "pos-test-0.2p.txt"
+    negative_docs_file = "neg-test-0.2p.txt"
 
     # model = DOCUMENT_CLASSIFIER
     # model = SENTENCE_CLASSIFIER
-    # model = STRUCTURED_JOINNT
+    # model = STRUCTURED_JOINT
     model = SENTENCE_STRUCTURED
     model_name = "{}-k{}-iter{}.txt".format(model, k, mira_iterations)
 
