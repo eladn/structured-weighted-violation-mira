@@ -40,3 +40,8 @@ class ProgressBar:
             # last step (verify 100% is printed and print new line in the end):
             sys.stdout.write("[%-50s] Done: %d%% out of %d\n" % ('=' * 50, 100, self.nr_tasks))
         sys.stdout.flush()
+
+
+def print_title(msg):
+    print(msg)
+    print('-' * len(msg))

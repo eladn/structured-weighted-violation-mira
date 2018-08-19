@@ -13,7 +13,7 @@ from sklearn.metrics import hamming_loss, zero_one_loss
 from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
     SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, MODELS, TEST_PATH
 
-from utils import ProgressBar
+from utils import ProgressBar, print_title
 
 
 class Corpus:
@@ -194,15 +194,47 @@ class Train:
 
     def mira_algorithm(self, iterations=5, k=10):
         optimization_time = time.time()
-        print("Training model: {}, k = {}, iterations = {}".format(self.model, k, iterations))
-        print("------------------------------------")
+        print_title("Training model: {}, k = {}, iterations = {}".format(self.model, k, iterations))
         pb = ProgressBar(iterations * len(self.corpus.documents))
-        for i in range(iterations):
-            for document, feature_vectors in zip(self.corpus.documents, self.evaluated_feature_vectors):
-                pb.start_next_task()
+        for cur_iter in range(1, iterations+1):
+            for doc_idx, (document, feature_vectors) in enumerate(zip(self.corpus.documents, self.evaluated_feature_vectors), start=1):
+                pb.start_next_task('iter: {cur_iter}/{nr_iters} -- document: {cur_doc}/{nr_docs}'.format(
+                    cur_iter=cur_iter, nr_iters=iterations, cur_doc=doc_idx, nr_docs=len(self.corpus.documents)
+                ))
+
                 c = self.extract_random_labeling_subset(document, k)
 
-                self.w = solve_qp(*self.extract_qp_matrices(document, feature_vectors, document.y(), c), solver="osqp")
+                w = solve_qp(*self.extract_qp_matrices(document, feature_vectors, document.y(), c), solver="osqp")
+                if np.any(np.equal(w, None)):
+                    print("Warning: QP solver returned None!")
+                else:
+                    self.w = w
+
+                # try:
+                #     np.isnan(w).any()
+                # except:
+                #     print('\n\n\n')
+                #     print(type(w))
+                #     print(w)
+                #     print('\n\n\n')
+                #     exit()
+                # np.any(np.equal(w, None))
+                # self.w = w
+
+                # import warnings
+                # with warnings.catch_warnings():
+                #     warnings.filterwarnings('error')
+                #     try:
+                #         w = solve_qp(*self.extract_qp_matrices(document, feature_vectors, document.y(), c), solver="osqp")
+                #         if w is None:
+                #             raise RuntimeWarning("Warning: QP solver returned None!\n")
+                #         elif np.isnan(w).any():
+                #             raise RuntimeWarning("QP solver returned vector with NaNs!\n")
+                #         else:
+                #             self.w = w
+                #     except Exception as e:
+                #         print("Warning: QP solver has raised a warning!")
+                #         print(e)
         pb.finish()
         print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
 
@@ -692,31 +724,31 @@ class FeatureVector:
             if model in (STRUCTURED_JOINT, DOCUMENT_CLASSIFIER):
                 for f_index, arguments in enumerate(feature_arguments):
                     value = self.document[document_label][f_index + 1].get(arguments)
-                    if value:
+                    if value is not None:
                         evaluated_feature.append(value)
 
             if model in (STRUCTURED_JOINT, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED):
                 for f_index, arguments in enumerate(feature_arguments):
                     value = self.sentence[sentence_label][f_index + 1].get(arguments)
-                    if value:
+                    if value is not None:
                         evaluated_feature.append(value)
 
             if model in (STRUCTURED_JOINT, SENTENCE_STRUCTURED):
                 for f_index, arguments in enumerate(feature_arguments):
                     if pre_sentence_label:
                         value = self.pre_sentence_sentence[(pre_sentence_label, sentence_label)][f_index + 1].get(arguments)
-                        if value:
+                        if value is not None:
                             evaluated_feature.append(value)
 
             if model == STRUCTURED_JOINT:
                 for f_index, arguments in enumerate(feature_arguments):
                     value = self.sentence_document[(sentence_label, document_label)][f_index + 1].get(arguments)
-                    if value:
+                    if value is not None:
                         evaluated_feature.append(value)
                 for f_index, arguments in enumerate(feature_arguments):
                     value = self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][
                         f_index + 1].get(arguments)
-                    if value:
+                    if value is not None:
                         evaluated_feature.append(value)
 
         return evaluated_feature
