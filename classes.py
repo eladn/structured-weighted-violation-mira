@@ -20,7 +20,8 @@ class Corpus:
     def __init__(self):
         self.documents = []
 
-    def load_file(self, file_name, documents_label, insert_sentence_labels):
+    def load_file(self, file_name, documents_label: int, insert_sentence_labels: bool):
+        assert documents_label in DOCUMENT_LABELS
         pattern = re.compile("^\d \d{7}$")
         with open(DATA_PATH + file_name) as f:
             document = Document(documents_label)
@@ -48,6 +49,7 @@ class Corpus:
 
 class Document:
     def __init__(self, label=None):
+        assert label is None or label in DOCUMENT_LABELS
         self.sentences = []
         self.label = label
 
@@ -168,7 +170,7 @@ class Train:
         print("Evaluating features")
         for doc_index, document in enumerate(self.corpus.documents, start=1):
             self.evaluated_feature_vectors.append(self.evaluate_document_feature_vector(document))
-            print("Document #{} evaluated features".format(doc_index))
+            print("Document #{} evaluated features".format(doc_index), end='\r')
         print("evaluate_feature_vectors done: {0:.3f} seconds".format(time.time() - start_time))
 
     def evaluate_document_feature_vector(self, document, y_tag=None):
@@ -345,7 +347,7 @@ class Test:
         pi = np.zeros((n, count_labels))
         bp = np.zeros((n, count_labels))
         for k, sentence in enumerate(document.sentences):
-            print("Sentence: {}".format(k))
+            #print("Sentence: {}".format(k))
             for v_index, v in enumerate(SENTENCE_LABELS):
                 if k == 0:
                     pi[k, v_index] = self.sentence_score(document, k, model, document_label, v, pre_sentence_label=None)
@@ -690,13 +692,21 @@ class FeatureVector:
                     if model == STRUCTURED_JOINT:
                         self.initialize_feature_based_on_label(sentence, index, sentence_label=sentence.label,
                                                                document_label=document.label)
-            print("Document #{} initialized features".format(doc_index))
+            print("Document #{} initialized features".format(doc_index), end='\r')
+        print("Finished initializing features.")
 
-    def evaluate_clique_feature_vector(self, document, sen_index, model, document_label=None, sentence_label=None,
+    def evaluate_clique_feature_vector(self, document: Document, sen_index: int, model,
+                                       document_label=None, sentence_label=None,
                                        pre_sentence_label=None):
+        assert model in MODELS
+        assert document_label is None or document_label in DOCUMENT_LABELS
+        assert sentence_label is None or sentence_label in SENTENCE_LABELS
+        assert pre_sentence_label is None or pre_sentence_label in SENTENCE_LABELS
+
         sentence = document.sentences[sen_index]
         document_label = document.label if document_label is None else document_label
         sentence_label = sentence.label if sentence_label is None else sentence_label
+
         if sen_index == 0:
             pre_sentence_label = None
         else:

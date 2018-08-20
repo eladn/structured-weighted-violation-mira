@@ -1,5 +1,6 @@
 from classes import Corpus, FeatureVector, Train, Test
-from constants import STRUCTURED_JOINT, SENTENCE_CLASSIFIER, DOCUMENT_CLASSIFIER, SENTENCE_STRUCTURED
+from constants import STRUCTURED_JOINT, SENTENCE_CLASSIFIER, DOCUMENT_CLASSIFIER, SENTENCE_STRUCTURED, DATA_PATH
+from utils import hash_file
 
 
 def data_exploration(train_set, test_set, comp_set):
@@ -42,14 +43,21 @@ def main():
     k = 10
     mira_iterations = 5
 
-    positive_docs_file = "pos-test-0.2p.txt"
-    negative_docs_file = "neg-test-0.2p.txt"
+    docs_filename_suffix_wo_ext = "train-0.6p"
+    positive_docs_file = "pos-" + docs_filename_suffix_wo_ext + '.txt'
+    negative_docs_file = "neg-" + docs_filename_suffix_wo_ext + '.txt'
+
+    data_hash = hash_file((DATA_PATH + positive_docs_file, DATA_PATH + negative_docs_file), hash_type='md5')
 
     # model = DOCUMENT_CLASSIFIER
     # model = SENTENCE_CLASSIFIER
     # model = STRUCTURED_JOINT
     model = SENTENCE_STRUCTURED
-    model_name = "{}-k{}-iter{}.txt".format(model, k, mira_iterations)
+    model_name = "{model_type}__k{k}__iter{iter}__{data_filename}__{data_hash}.txt".format(
+        model_type=model, k=k, iter=mira_iterations,
+        data_filename=docs_filename_suffix_wo_ext, data_hash=data_hash[:8]
+    )
+    print('Model name: ' + model_name)
 
     train_set = Corpus()
     train_set.load_file(positive_docs_file, documents_label=1, insert_sentence_labels=True)
@@ -75,6 +83,8 @@ def main():
         else:
             test = Test(train_set, feature_vector, model)
             test.load_model(model_name)
+
+        # test.model = SENTENCE_CLASSIFIER  # TODO: remove!
 
         # test.evaluate_exp_v_f()
         test.inference()

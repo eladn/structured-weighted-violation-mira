@@ -1,5 +1,7 @@
 import numpy as np
 import sys
+from typing import Union, Iterable, AnyStr
+import hashlib
 
 
 class ProgressBar:
@@ -42,6 +44,25 @@ class ProgressBar:
         sys.stdout.flush()
 
 
-def print_title(msg):
-    print(msg)
+def print_title(msg, *args, **kwargs):
+    print(msg, *args, **kwargs)
     print('-' * len(msg))
+
+
+def hash_file(file_paths: Union[AnyStr, Iterable[AnyStr]], hash_type='sha1'):
+    assert hash_type in {'md5', 'sha1'}
+
+    # BUF_SIZE is totally arbitrary, change for your app!
+    BUF_SIZE = 65536  # lets read stuff in 64kb chunks!
+
+    hasher_func = getattr(hashlib, hash_type)()
+
+    file_paths = file_paths if isinstance(file_paths, str) else file_paths
+    for file_path in file_paths:
+        with open(file_path, 'rb') as f:
+            while True:
+                data = f.read(BUF_SIZE)
+                if not data:
+                    break
+                hasher_func.update(data)
+    return hasher_func.hexdigest()
