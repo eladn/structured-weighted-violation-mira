@@ -45,6 +45,7 @@ class ProgressBar:
 
 
 def print_title(msg, *args, **kwargs):
+    print()
     print(msg, *args, **kwargs)
     print('-' * len(msg))
 

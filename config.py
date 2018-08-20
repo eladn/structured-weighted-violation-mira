@@ -4,18 +4,19 @@ from utils import hash_file
 
 class Config:
     perform_train = False
-    perform_test = True
+    evaluate_over_train_set = True
+    evaluate_over_test_set = True
 
     mira_k = 10
     mira_iterations = 5
 
-    docs_train_filename_base_wo_ext = "test-0.2p"
+    docs_train_filename_base_wo_ext = "train-0.6p"
     docs_test_filename_base_wo_ext = "test-0.2p"
 
     # model_type = DOCUMENT_CLASSIFIER
     # model_type = SENTENCE_CLASSIFIER
-    model_type = STRUCTURED_JOINT
-    # model_type = SENTENCE_STRUCTURED
+    # model_type = STRUCTURED_JOINT
+    model_type = SENTENCE_STRUCTURED
 
     @property
     def pos_docs_train_filename(self):

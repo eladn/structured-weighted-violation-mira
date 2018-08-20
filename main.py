@@ -1,6 +1,7 @@
 from classes import Corpus, FeatureVector, Train, Test
 from config import Config
 from collections import namedtuple
+from utils import print_title
 
 
 def data_exploration(train_set, test_set, comp_set):
@@ -66,19 +67,26 @@ def main():
         trainer.mira_algorithm(iterations=config.mira_iterations, k=config.mira_k)
         trainer.save_model(config.model_weights_filename)
 
-    if config.perform_test:
+    evaluation_datasets = []
+    if config.evaluate_over_train_set:
+        evaluation_datasets.append(('train', dataset.train))
+    if config.evaluate_over_test_set:
+        evaluation_datasets.append(('test', dataset.test))
+
+    for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
+        print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
         if config.perform_train:
-            tester = Test(dataset.test.clone(), feature_vector, config.model_type, w=trainer.w)
+            tester = Test(evaluation_dataset.clone(), feature_vector, config.model_type, w=trainer.w)
         else:
-            tester = Test(dataset.test.clone(), feature_vector, config.model_type)
+            tester = Test(evaluation_dataset.clone(), feature_vector, config.model_type)
             tester.load_model(config.model_weights_filename)
 
         tester.inference()
 
-        test_set_ground_truth = dataset.test.clone()
-        print(tester.evaluate_model(test_set_ground_truth, config.model_type))
+        evaluation_set_ground_truth = evaluation_dataset.clone()
+        print(tester.evaluate_model(evaluation_set_ground_truth, config.model_type))
         # tester.print_results_to_file(tagged_test_set, model_name, is_test=True)
-        tester.confusion_matrix(test_set_ground_truth, config.model_name)
+        tester.confusion_matrix(evaluation_set_ground_truth, config.model_name)
         # tester.confusion_matrix_ten_max_errors(model_name, is_test=True)
 
 
