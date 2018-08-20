@@ -95,7 +95,7 @@ class Sentence:
 
     def clone(self):
         new_sentence = Sentence('-1\ttv_NN', False)
-        new_sentence.label = None
+        new_sentence.label = self.label
         new_sentence.tokens = [tagged_word.clone() for tagged_word in self.tokens]
         return new_sentence
 
@@ -310,7 +310,7 @@ class Test:
                                                                 pre_sentence_label=pre_sentence_label)
         return np.sum(np.take(self.w, fv))
 
-    def viterbi_on_document(self, document: Document, document_index: int, model):
+    def viterbi_on_document(self, document: Document, document_index: int, model, verbose: bool=True):
         assert model in MODELS
 
         start_time = time.time()
@@ -330,8 +330,9 @@ class Test:
         for k in range(n - 2, -1, -1):
             document.sentences[k].label = int(bp_best[k + 1, SENTENCE_LABELS.index(document.sentences[k + 1].label)])
 
-        print("Sentence {} viterbi done".format(document_index))
-        print("{0:.3f} seconds".format(time.time() - start_time))
+        if verbose:
+            print("Viterbi on document #{doc_num} done. {time:.3f} seconds.".format(
+                doc_num=document_index, time=(time.time() - start_time)), end='\r')
         return document, document_index
 
     def viterbi_on_sentences(self, document: Document, document_index: int, model, verbose: bool=True):
@@ -473,9 +474,9 @@ class Test:
         for d1, d2 in zip(self.corpus.documents, ground_truth.documents):
             for s1, s2 in zip(d1.sentences, d2.sentences):
                 self.matrix[SENTENCE_LABELS.index(s1.label)][SENTENCE_LABELS.index(s2.label)] += 1
-        np.savetxt(path + "{}_confusion_matrix".format(model_name), self.matrix)
+        np.savetxt(path + "{}__confusion_matrix.txt".format(model_name), self.matrix)
 
-        file = open(path + "{}_confusion_matrix_lines".format(model_name), "w")
+        file = open(path + "{}__confusion_matrix_lines.txt".format(model_name), "w")
         for i in range(len(SENTENCE_LABELS)):
             for j in range(len(SENTENCE_LABELS)):
                 value = self.matrix[i][j]
@@ -772,10 +773,11 @@ class FeatureVector:
                     if value is not None:
                         evaluated_feature.append(value)
                 for f_index, arguments in enumerate(feature_arguments):
-                    value = self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][
-                        f_index + 1].get(arguments)
-                    if value is not None:
-                        evaluated_feature.append(value)
+                    if pre_sentence_label:
+                        value = self.pre_sentence_sentence_document[(pre_sentence_label, sentence_label, document_label)][
+                            f_index + 1].get(arguments)
+                        if value is not None:
+                            evaluated_feature.append(value)
 
         return evaluated_feature
 
