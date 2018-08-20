@@ -37,7 +37,7 @@ def data_exploration(train_set, test_set, comp_set):
 
 
 def main():
-    do_train = False
+    do_train = True
     do_test = True
 
     k = 10
@@ -72,9 +72,10 @@ def main():
     #     train.load_model(initial_v)
     # feature_vector.print_num_of_features()
     if do_train:
+        from random import shuffle
+        shuffle(train.corpus.documents)
         train.evaluate_feature_vectors()
-        result = train.mira_algorithm(iterations=mira_iterations, k=k)
-        print("Gradient average: {}".format(result))
+        train.mira_algorithm(iterations=mira_iterations, k=k)
         train.save_model(model_name)
 
     if do_test:
@@ -87,6 +88,12 @@ def main():
         # test.model = SENTENCE_CLASSIFIER  # TODO: remove!
 
         # test.evaluate_exp_v_f()
+
+        # Use random weights vector in order to show that the inference
+        # of the simple sentence-classifier actually does nothing at all.
+        # import numpy as np
+        # test.w = (np.random.rand(*test.w.shape) * 2 - 1) * 1e-03
+
         test.inference()
         # for sentence in test_set.sentences:
         #     for token in sentence.tokens:

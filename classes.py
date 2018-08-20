@@ -5,10 +5,13 @@ from scipy import sparse
 
 import numpy as np
 import time
+from itertools import islice
 
 from qpsolvers import solve_qp
 from scipy.sparse import csr_matrix
 from sklearn.metrics import hamming_loss, zero_one_loss
+from warnings import warn
+import sys
 
 from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
     SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, MODELS, TEST_PATH
@@ -19,6 +22,11 @@ from utils import ProgressBar, print_title
 class Corpus:
     def __init__(self):
         self.documents = []
+
+    def clone(self):
+        new_corpus = Corpus()
+        new_corpus.documents = [doc.clone() for doc in self.documents]
+        return new_corpus
 
     def load_file(self, file_name, documents_label: int, insert_sentence_labels: bool):
         assert documents_label in DOCUMENT_LABELS
@@ -53,6 +61,11 @@ class Document:
         self.sentences = []
         self.label = label
 
+    def clone(self):
+        new_doc = Document(self.label)
+        new_doc.sentences = [sentence.clone() for sentence in self.sentences]
+        return new_doc
+
     def load_sentence(self, line, insert_sec_labels):
         self.sentences.append(Sentence(line, insert_sec_labels))
 
@@ -70,7 +83,7 @@ class Document:
 
 
 class Sentence:
-    def __init__(self, sentence: str, insert_sec_labels):
+    def __init__(self, sentence: str, insert_sec_labels: bool):
         self.tokens = []
         splitted_sec = sentence.split("\t")
         if insert_sec_labels:
@@ -80,12 +93,18 @@ class Sentence:
         words = "\t".join(splitted_sec[1:])
         self.tokens = [TaggedWord(word_tag=token) for token in Sentence.split_cleaned_line(words)]
 
+    def clone(self):
+        new_sentence = Sentence('-1\ttv_NN', False)
+        new_sentence.label = None
+        new_sentence.tokens = [tagged_word.clone() for tagged_word in self.tokens]
+        return new_sentence
+
     @staticmethod
     def split_cleaned_line(line):  # TODO check if fix with data?
         return line.strip("\n ").split(" ")
 
     def count_tokens(self):
-        return self.tokens.size
+        return len(self.tokens)
 
     def xgram(self, index, x):
         beginning = ["*" for _ in range(max(x - index - 1, 0))]
@@ -116,6 +135,9 @@ class TaggedWord:
 
         self.word = word
         self.tag = tag
+
+    def clone(self):
+        return TaggedWord(self.word, self.tag)
 
     @staticmethod
     def split_word_tag(word_tag):
@@ -177,11 +199,11 @@ class Train:
         # TODO if not structured - should not count from 1
         y_document = y_tag[0] if y_tag is not None else None
         row_ind, col_ind = [], []
-        for sentence_index, sentence in enumerate(document.sentences[1:], start=1):  # TODO
+        for sentence_index, sentence in enumerate(islice(document.sentences, 1, None), start=1):  # TODO
             y_sentence = y_tag[sentence_index + 1] if y_tag is not None else None
             y_pre_sentence = y_tag[sentence_index] if y_tag is not None else None
-            feature_indices = self.feature_vector.evaluate_clique_feature_vector(document, sentence_index, self.model,
-                                                                                 y_document, y_sentence, y_pre_sentence)
+            feature_indices = self.feature_vector.evaluate_clique_feature_vector(
+                document, sentence_index, self.model, y_document, y_sentence, y_pre_sentence)
             col_ind += feature_indices
             row_ind += [sentence_index - 1 for _ in feature_indices]
 
@@ -198,51 +220,36 @@ class Train:
         optimization_time = time.time()
         print_title("Training model: {}, k = {}, iterations = {}".format(self.model, k, iterations))
         pb = ProgressBar(iterations * len(self.corpus.documents))
+        test = Test(self.corpus.clone(), self.feature_vector, self.model)
         for cur_iter in range(1, iterations+1):
             for doc_idx, (document, feature_vectors) in enumerate(zip(self.corpus.documents, self.evaluated_feature_vectors), start=1):
-                pb.start_next_task('iter: {cur_iter}/{nr_iters} -- document: {cur_doc}/{nr_docs}'.format(
+                task_str = 'iter: {cur_iter}/{nr_iters} -- document: {cur_doc}/{nr_docs}'.format(
                     cur_iter=cur_iter, nr_iters=iterations, cur_doc=doc_idx, nr_docs=len(self.corpus.documents)
-                ))
+                )
+                pb.start_next_task(task_str)
 
-                c = self.extract_random_labeling_subset(document, k)
+                if k > 1:
+                    c = self.extract_random_labeling_subset(document, k, use_document_tag=False)
+                elif k == 1:
+                    test.w = self.w
+                    test.inference(verbose=False)
+                    labels = [document.label] + [sentence.label for sentence in document.sentences]
+                    c = [labels]
 
-                w = solve_qp(*self.extract_qp_matrices(document, feature_vectors, document.y(), c), solver="osqp")
+                P, q, G, h = self.extract_qp_matrices(document, feature_vectors, document.y(), c)
+                w = solve_qp(P, q, G, h, solver="osqp")
                 if np.any(np.equal(w, None)):
-                    print("Warning: QP solver returned None!")
+                    print(file=sys.stderr)
+                    warn_msg = "QP solver returned `None`s solution vector. Weights vector `w` has not been updated. [{}]".format(task_str)
+                    warn(warn_msg)
                 else:
                     self.w = w
-
-                # try:
-                #     np.isnan(w).any()
-                # except:
-                #     print('\n\n\n')
-                #     print(type(w))
-                #     print(w)
-                #     print('\n\n\n')
-                #     exit()
-                # np.any(np.equal(w, None))
-                # self.w = w
-
-                # import warnings
-                # with warnings.catch_warnings():
-                #     warnings.filterwarnings('error')
-                #     try:
-                #         w = solve_qp(*self.extract_qp_matrices(document, feature_vectors, document.y(), c), solver="osqp")
-                #         if w is None:
-                #             raise RuntimeWarning("Warning: QP solver returned None!\n")
-                #         elif np.isnan(w).any():
-                #             raise RuntimeWarning("QP solver returned vector with NaNs!\n")
-                #         else:
-                #             self.w = w
-                #     except Exception as e:
-                #         print("Warning: QP solver has raised a warning!")
-                #         print(e)
         pb.finish()
         print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
 
     def extract_qp_matrices(self, document, feature_vectors, y, c):
         M = sparse.eye(self.feature_vector.count_features())
-        q = np.copy(self.w)
+        q = np.copy(self.w) * -1
         y_fv = feature_vectors.sum(axis=0)
         y_fv = np.asarray(y_fv).reshape((y_fv.shape[1],))
         G = None
@@ -254,15 +261,22 @@ class Train:
                 G = y_tag_fv - y_fv
             else:
                 G = np.vstack((G, y_tag_fv - y_fv))
-            h.append(-hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]]))
+            # y_tag_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]])
+            y_tag_document_loss = zero_one_loss([y[0]], [y_tag[0]])
+            y_tag_sentences_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:])
+            # y_tag_loss = y_tag_sentences_loss * y_tag_document_loss  # original loss
+            y_tag_loss = y_tag_sentences_loss
+            if self.model in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}:
+                y_tag_loss += y_tag_document_loss
+            h.append(-y_tag_loss)
         G = csr_matrix(G)
         h = np.array(h).reshape(len(c), )
         return M, q.reshape((self.feature_vector.count_features()), ), G, h
 
     @staticmethod
-    def extract_random_labeling_subset(document, k):  # TODO use viterbi to find the best c
+    def extract_random_labeling_subset(document, k, use_document_tag: bool=False):  # TODO use viterbi to find the best c
         return [
-            [random.choice(DOCUMENT_LABELS)] +
+            [document.label if use_document_tag else random.choice(DOCUMENT_LABELS)] +
             [random.choice(SENTENCE_LABELS) for _ in range(document.count_sentences())]
             for _ in range(k)]
 
@@ -320,7 +334,7 @@ class Test:
         print("{0:.3f} seconds".format(time.time() - start_time))
         return document, document_index
 
-    def viterbi_on_sentences(self, document: Document, document_index: int, model):
+    def viterbi_on_sentences(self, document: Document, document_index: int, model, verbose: bool=True):
         assert model in MODELS
 
         start_time = time.time()
@@ -334,8 +348,9 @@ class Test:
         for k in range(n - 2, -1, -1):
             document.sentences[k].label = int(bp[k + 1, SENTENCE_LABELS.index(document.sentences[k + 1].label)])
 
-        print("Viterbi on sentences over document #{} done".format(document_index))
-        print("{0:.3f} seconds".format(time.time() - start_time))
+        if verbose:
+            print("Viterbi on sentences over document #{doc_num} done. {time:.3f} seconds.".format(
+                doc_num=document_index, time=(time.time() - start_time)), end='\r')
         return document, document_index
 
     def viterbi_on_document_label(self, document: Document, document_label, model):
@@ -371,16 +386,16 @@ class Test:
                     best_document_score = sum_document_score
                     document.label = document_label
 
-    def sentence_predict(self, document, model):
-        best_sentence_score = None
+    def sentence_predict(self, document: Document, model):
         for i, sentence in enumerate(document.sentences):
+            best_sentence_score = None
             for sentence_label in SENTENCE_LABELS:
                 temp_sentence_score = self.sentence_score(document, i, model, document_label=None, sentence_label=sentence_label, pre_sentence_label=None)
                 if best_sentence_score is None or temp_sentence_score > best_sentence_score:
                     best_sentence_score = temp_sentence_score
                     sentence.label = sentence_label
 
-    def inference(self):
+    def inference(self, verbose: bool=True):
         start_time = time.time()
 
         if self.model == DOCUMENT_CLASSIFIER:
@@ -392,13 +407,14 @@ class Test:
 
         elif self.model == SENTENCE_STRUCTURED:
             for i, document in enumerate(self.corpus.documents):
-                self.viterbi_on_sentences(document, i, self.model)
+                self.viterbi_on_sentences(document, i, self.model, verbose=verbose)
 
         elif self.model == STRUCTURED_JOINT:
             for i, document in enumerate(self.corpus.documents):
                 self.viterbi_on_document(document, i, self.model)
 
-        print("inference done: {0:.3f} seconds".format(time.time() - start_time))
+        if verbose:
+            print("inference done: {0:.3f} seconds".format(time.time() - start_time))
 
     def load_model(self, model_name):
         path = MODELS_PATH
