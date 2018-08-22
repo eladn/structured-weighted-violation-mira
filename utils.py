@@ -2,6 +2,7 @@ import numpy as np
 import sys
 from typing import Union, Iterable, AnyStr
 import hashlib
+import time
 
 
 class ProgressBar:
@@ -9,6 +10,7 @@ class ProgressBar:
         self.nr_tasks = nr_tasks
         self.curr_task = 0
         self.curr_task_title = ''
+        self.start_time = None
 
     @property
     def nr_completed(self):
@@ -18,10 +20,12 @@ class ProgressBar:
         assert(self.curr_task < self.nr_tasks)
         self.curr_task += 1
         self.print_status(task_title)
+        if self.start_time is None:
+            self.start_time = time.time()
 
     def finish(self):
         self.curr_task = None
-        self.curr_task_title = ''
+        self.curr_task_title = 'Total time: {0:.3f} seconds'.format(time.time() - self.start_time)
         self.print_status()
 
     def print_status(self, curr_task_title=None):

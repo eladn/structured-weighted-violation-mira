@@ -216,25 +216,29 @@ class Train:
     def gradient(self, w, w_i):
         return 2 * np.sum(w - w_i)
 
-    def mira_algorithm(self, iterations=5, k=10):
+    def mira_algorithm(self, iterations=5, k=10, best_k_labeling_method='rand'):
+        assert best_k_labeling_method in {'rand', 'viterbi', 'rand-and-viterbi'}
+
         optimization_time = time.time()
         print_title("Training model: {}, k = {}, iterations = {}".format(self.model, k, iterations))
         pb = ProgressBar(iterations * len(self.corpus.documents))
         test = Test(self.corpus.clone(), self.feature_vector, self.model)
         for cur_iter in range(1, iterations+1):
-            for doc_idx, (document, feature_vectors) in enumerate(zip(self.corpus.documents, self.evaluated_feature_vectors), start=1):
+            for doc_idx, (document, test_document, feature_vectors) in enumerate(zip(self.corpus.documents, test.corpus.documents, self.evaluated_feature_vectors)):
                 task_str = 'iter: {cur_iter}/{nr_iters} -- document: {cur_doc}/{nr_docs}'.format(
-                    cur_iter=cur_iter, nr_iters=iterations, cur_doc=doc_idx, nr_docs=len(self.corpus.documents)
+                    cur_iter=cur_iter, nr_iters=iterations, cur_doc=doc_idx+1, nr_docs=len(self.corpus.documents)
                 )
                 pb.start_next_task(task_str)
 
-                if k > 1:
+                if best_k_labeling_method == 'rand':
                     c = self.extract_random_labeling_subset(document, k, use_document_tag=False)
-                elif k == 1:
+                else:  # best_k_labeling_method == 'viterbi'
                     test.w = self.w
-                    test.inference(verbose=False)
-                    labels = [document.label] + [sentence.label for sentence in document.sentences]
+                    # TODO: impl & use k-best viterbi
+                    test.viterbi_on_sentences(test_document, doc_idx, test.model, verbose=False)
+                    labels = [document.label] + [sentence.label for sentence in test_document.sentences]
                     c = [labels]
+                # TODO: handle case best_k_labeling_method == 'rand-and-viterbi' (0.5k, 0.5k)
 
                 P, q, G, h = self.extract_qp_matrices(document, feature_vectors, document.y(), c)
                 w = solve_qp(P, q, G, h, solver="osqp")
