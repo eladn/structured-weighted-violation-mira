@@ -89,7 +89,7 @@ class SentimentModelTrainer:
                 else:  # best_k_labeling_method == 'viterbi'
                     tester.w = self.w
                     # TODO: impl & use k-best viterbi
-                    tester.viterbi_on_sentences(test_document, doc_idx, tester.model, verbose=False)
+                    tester.viterbi_on_sentences(test_document)
                     labels = [document.label] + [sentence.label for sentence in test_document.sentences]
                     c = [labels]
                 # TODO: handle case best_k_labeling_method == 'rand-and-viterbi' (0.5k, 0.5k)
