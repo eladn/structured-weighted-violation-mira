@@ -1,6 +1,7 @@
 from constants import SENTENCE_CLASSIFIER, DOCUMENT_CLASSIFIER, SENTENCE_STRUCTURED, STRUCTURED_JOINT, \
     DOCUMENT_LABELS, SENTENCE_LABELS, MODELS
 from document import Document
+from utils import ProgressBar
 
 import numpy as np
 
@@ -183,7 +184,9 @@ class FeatureVector:
 
     def initialize_features(self, model):
         print("Initializing features")
+        pb = ProgressBar(len(self.corpus.documents))
         for doc_index, document in enumerate(self.corpus.documents, start=1):
+            pb.start_next_task()
             for sen_index, sentence in enumerate(document.sentences):
                 for index, token in enumerate(sentence.tokens):
                     if sen_index >= 1:
@@ -205,7 +208,7 @@ class FeatureVector:
                     if model == STRUCTURED_JOINT:
                         self.initialize_feature_based_on_label(sentence, index, sentence_label=sentence.label,
                                                                document_label=document.label)
-            print("Document #{} initialized features".format(doc_index), end='\r')
+        pb.finish()
         print("Finished initializing features.")
 
     def evaluate_clique_feature_vector(self, document: Document, sen_index: int, model,
