@@ -2,6 +2,7 @@ DEBUG = True
 
 DOCUMENT_LABELS = [-1, 1]
 SENTENCE_LABELS = [-1, 1]
+NR_SENTENCE_LABELS = len(SENTENCE_LABELS)
 
 STRUCTURED_JOINT = "structured-joint"
 DOCUMENT_CLASSIFIER = "document-classifier"

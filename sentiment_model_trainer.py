@@ -4,6 +4,7 @@ from scipy import sparse
 import numpy as np
 import time
 from itertools import islice
+from random import shuffle
 
 from qpsolvers import solve_qp
 from scipy.sparse import csr_matrix
@@ -84,15 +85,17 @@ class SentimentModelTrainer:
                 )
                 pb.start_next_task(task_str)
 
-                if best_k_labeling_method == 'rand':
-                    c = self.extract_random_labeling_subset(document, k, use_document_tag=False)
-                else:  # best_k_labeling_method == 'viterbi'
+                k_per_labeling_method = k // (1 if best_k_labeling_method != 'rand-and-viterbi' else 2)
+                c = []
+                if best_k_labeling_method == 'rand' or best_k_labeling_method == 'rand-and-viterbi':
+                    c = self.extract_random_labeling_subset(document, k_per_labeling_method, use_document_tag=False)
+                if best_k_labeling_method == 'viterbi' or best_k_labeling_method == 'rand-and-viterbi':
                     tester.w = self.w
-                    # TODO: impl & use k-best viterbi
-                    tester.viterbi_on_sentences(test_document)
-                    labels = [document.label] + [sentence.label for sentence in test_document.sentences]
-                    c = [labels]
-                # TODO: handle case best_k_labeling_method == 'rand-and-viterbi' (0.5k, 0.5k)
+                    labelings = tester.viterbi_inference(test_document, top_k=k_per_labeling_method)
+                    # labels = [test_document.label] + [sentence.label for sentence in test_document.sentences]
+                    c += labelings
+                    shuffle(c)
+                assert(len(c) >= 1)
 
                 P, q, G, h = self.extract_qp_matrices(document, feature_vectors, document.y(), c)
                 w = solve_qp(P, q, G, h, solver="osqp")

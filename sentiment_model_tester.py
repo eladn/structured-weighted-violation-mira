@@ -1,9 +1,10 @@
 
 import numpy as np
 import time
+from itertools import chain
 
 from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
-    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, MODELS, TEST_PATH
+    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, NR_SENTENCE_LABELS, MODELS, TEST_PATH
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
@@ -36,44 +37,124 @@ class SentimentModelTester:
     # if `infer_document_label` is False, `document.label` will be used.
     # Otherwise, all possible document labels will be tested, and the one with
     # the maximal total document score will be assigned to `document.label`.
-    def viterbi_inference(self, document: Document, infer_document_label: bool=True):
+    def viterbi_inference(self, document: Document, infer_document_label: bool=True, top_k: int=7, assign_best_labeling=True):
         nr_sentences = document.count_sentences()
         bp, pi = None, None
 
         # Forward pass: calculate `pi` and `bp`.
         if infer_document_label:
             for document_label in DOCUMENT_LABELS:
-                cur_bp, cur_pi = self.viterbi_forward_pass(document, document_label=document_label)
+                cur_bp, cur_pi = self.viterbi_forward_pass(document, document_label=document_label, top_k=top_k)
                 if (bp is None and pi is None) or (cur_pi[-1].max() > pi[-1].max()):
                     bp, pi = cur_bp, cur_pi
                     document.label = document_label
         else:
             # `document.label` will be used as document label.
-            bp, pi = self.viterbi_forward_pass(document, document_label=None)
+            bp, pi = self.viterbi_forward_pass(document, document_label=None, top_k=top_k)
 
         # Backward pass: assign optimal sentence labels using calculated `pi` and `bp`.
-        last_sentence_label_index = np.where(pi[-1] == pi[-1].max())
-        document.sentences[-1].label = SENTENCE_LABELS[last_sentence_label_index[0][0]]
-        for k in range(nr_sentences - 2, -1, -1):
-            document.sentences[k].label = bp[k + 1, SENTENCE_LABELS.index(document.sentences[k + 1].label)]
+        # TODO: fix to adapt top-k !
+        labelings = [[document.label] + [None for _ in document.sentences] for _ in range(top_k)]
 
-    def viterbi_forward_pass(self, document: Document, document_label=None):
+        for k in range(top_k):
+            sentence_rank = k
+            following_sentence_label_idx = 0
+            for sentence_idx in range(nr_sentences - 1, -1, -1):
+                # Assign the label for sentence #sentence_idx, for the k-th labeling.
+                following_sentence_idx = sentence_idx + 1
+                sentence_label_idx = bp[following_sentence_idx, following_sentence_label_idx, sentence_rank, 0]
+                sentence_rank = bp[following_sentence_idx, following_sentence_label_idx, sentence_rank, 1]
+                labelings[k][sentence_idx+1] = SENTENCE_LABELS[sentence_label_idx]
+                if k == 0 and assign_best_labeling:
+                    document.sentences[sentence_idx].label = SENTENCE_LABELS[sentence_label_idx]
+                following_sentence_label_idx = sentence_label_idx
+            assert(sentence_rank == 0)  # TODO: explain
+
+        # last_sentence_label_index = np.where(pi[-1] == pi[-1].max())
+        # document.sentences[-1].label = SENTENCE_LABELS[last_sentence_label_index[0][0]]
+        #
+        # for sentence_idx in range(nr_sentences - 2, -1, -1):
+        #     next_sentence_label_idx = SENTENCE_LABELS.index(document.sentences[sentence_idx + 1].label)
+        #     best_sentence_label_idx = bp[sentence_idx + 1, next_sentence_label_idx, 0, 0]
+        #     document.sentences[sentence_idx].label = SENTENCE_LABELS[best_sentence_label_idx]
+
+        return labelings
+
+    def viterbi_forward_pass(self, document: Document, document_label=None, top_k: int=1):
         assert document_label is None or document_label in DOCUMENT_LABELS
 
         nr_sentences = document.count_sentences()
-        count_labels = len(SENTENCE_LABELS)
-        pi = np.zeros((nr_sentences, count_labels))
-        bp = np.zeros((nr_sentences, count_labels), dtype=int)
+        pi = np.zeros((nr_sentences+1, NR_SENTENCE_LABELS, top_k))
+        # For each sentence_idx>1, sentence_label_idx, and k in {0, ..., top_k-1}:
+        #   bp[sentence_idx, sentence_label_idx, k, 0] is the pre_sentence_label_idx
+        #   bp[sentence_idx, sentence_label_idx, k, 1] is the pre_sentence_rank (which is in {0, ..., top_k-1})
+        # So that the k'th best rank for `sentence_idx` and `sentence_label_idx` is with the path
+        # that ends in bp[sentence_idx-1, pre_sentence_label_idx, pre_sentence_rank].
+        bp = np.zeros((nr_sentences+1, NR_SENTENCE_LABELS, top_k, 2), dtype=int)
 
-        for k, sentence in enumerate(document.sentences):
-            for v_index, v in enumerate(SENTENCE_LABELS):
-                if k == 0:
-                    pi[k, v_index] = self.sentence_score(document, k, document_label, v, pre_sentence_label=None)
+        # Note:
+        # We perform one more iteration, with a None sentence, only in order to calculate `bp` for last_sentence_idx+1.
+        # This is going to help us finding the top_k best labelings in the backward pass.
+        for sentence_idx, sentence in enumerate(chain(document.sentences, [None])):
+            for sentence_label_idx, sentence_label in enumerate(SENTENCE_LABELS):
+                if sentence_idx == 0:
+                    # In order to avoid duplicating each final labeling vector for top_k times, we enforce that the
+                    # first sentence will have positive scores only for rank=0 (for each labeling).
+                    pi[sentence_idx, sentence_label_idx, :] = -np.inf
+                    pi[sentence_idx, sentence_label_idx, 0] = self.sentence_score(
+                        document, sentence_idx, document_label, sentence_label, pre_sentence_label=None)
                 else:
-                    pi_q = [self.sentence_score(document, k, document_label, v, t) + pi[k - 1, t_index]
-                            for t_index, t in enumerate(SENTENCE_LABELS)]
-                    pi[k, v_index] = np.amax(pi_q)
-                    bp[k, v_index] = SENTENCE_LABELS[np.argmax(pi_q)]
+                    # TODO: fix to adapt top-k !
+                    # TODO: doc!
+                    # TODO: test!
+                    if sentence is not None:
+                        # Remember that the label of the previous sentence may affect the score of the current sentence.
+                        # For each possible label (for the previous sentence), evaluate the score of the current
+                        # sentence, when using `sentence_label` as the label for the current sentence.
+                        sentence_scores_per_pre_sentence_label = [(pre_sentence_label_idx, self.sentence_score(
+                            document, sentence_idx, document_label, sentence_label, pre_sentence_label))
+                                for pre_sentence_label_idx, pre_sentence_label in enumerate(SENTENCE_LABELS)]
+                    else:
+                        # It is the last iteration.
+                        # TODO: DOC!
+                        sentence_scores_per_pre_sentence_label = [
+                            (pre_sentence_label_idx, 0)
+                            for pre_sentence_label_idx, pre_sentence_label in enumerate(SENTENCE_LABELS)]
+
+                    # Create a matrix of size (NR_LABELS * top_k), such that the cell M[pre_lbl_idx, pre_rank] contains
+                    # the total score of the sentences 1...current, when using the (pre_rank+1)-th best path of the
+                    # previous sentence when its label is lbl_pre_lbl_idx.
+                    total_scores_per_pre_sentence_label_and_rank = np.array(
+                        [[sentence_score + pi[sentence_idx - 1, pre_sentence_label_idx, pre_sentence_rank]
+                          for pre_sentence_rank in range(top_k)]
+                         for pre_sentence_label_idx, sentence_score in sentence_scores_per_pre_sentence_label])
+
+                    # Find (flattened) indeces of top_k elements with highest score in the above created matrix,
+                    #   (out of its NR_SENTENCE_LABELS * top_k elements).
+                    # What is a "FLATTENED" index?
+                    #   For example, in the matrix [[8 3 1] [7 9 4]], the flattened index of the element `9` is 4.
+                    # Why do we use flattened indeces and not simply (i,j) indeces (this is a matrix)?
+                    #   It is just much simpler to perform the following tasks with a single value index.
+                    # Time complexity:
+                    #   linear! O(total_scores_per_pre_sentence_label_and_rank.size) = O(NR_SENTENCE_LABELS * top_k)
+                    top_k_flattened_indexes = np.argpartition(total_scores_per_pre_sentence_label_and_rank,
+                                                              -top_k, axis=None)[-top_k:]
+
+                    # Find the scores of the actual top_k elements.
+                    top_k_elements = total_scores_per_pre_sentence_label_and_rank.flat[top_k_flattened_indexes]
+
+                    # Now lets sort these best found top_k elements by their score (descending order).
+                    # Time complexity: O(top_k * log(top_k))
+                    # Notice: Out of (NR_SENTENCE_LABELS * top_k) elements we found and sorted the best top_k elements
+                    #   using time complexity (NR_SENTENCE_LABELS * top_k) + (top_k * log(top_k)), which is optimal.
+                    top_k_elements_sorting_flattened_indexes = np.argsort(top_k_elements, kind='heapsort')[::-1]
+                    top_k_flattened_indexes_sorted = top_k_flattened_indexes[top_k_elements_sorting_flattened_indexes]
+                    top_k_elements_sorted = top_k_elements[top_k_elements_sorting_flattened_indexes]
+
+                    # Update the dynamic-programming arrays (scores and back-pointer) for the current sentence.
+                    pi[sentence_idx, sentence_label_idx, :] = top_k_elements_sorted
+                    bp[sentence_idx, sentence_label_idx, :, 0] = top_k_flattened_indexes_sorted // top_k
+                    bp[sentence_idx, sentence_label_idx, :, 1] = top_k_flattened_indexes_sorted % top_k
 
         return bp, pi
 
