@@ -33,39 +33,38 @@ class SentimentModelTester:
                                                                 pre_sentence_label=pre_sentence_label)
         return np.sum(np.take(self.w, fv))
 
-    def viterbi_on_document(self, document: Document):
-        n = document.count_sentences()
-        bp_best, pi_best = None, None
+    # if `infer_document_label` is False, `document.label` will be used.
+    # Otherwise, all possible document labels will be tested, and the one with
+    # the maximal total document score will be assigned to `document.label`.
+    def viterbi_inference(self, document: Document, infer_document_label: bool=True):
+        nr_sentences = document.count_sentences()
+        bp, pi = None, None
 
-        for document_label in DOCUMENT_LABELS:
-            bp, pi = self.viterbi_on_document_label(document, document_label)
-            if (bp_best is None and pi_best is None) or (pi[n - 1].max() > pi_best[n - 1].max()):
-                bp_best, pi_best = bp, pi
-                document.label = document_label
+        # Forward pass: calculate `pi` and `bp`.
+        if infer_document_label:
+            for document_label in DOCUMENT_LABELS:
+                cur_bp, cur_pi = self.viterbi_forward_pass(document, document_label=document_label)
+                if (bp is None and pi is None) or (cur_pi[-1].max() > pi[-1].max()):
+                    bp, pi = cur_bp, cur_pi
+                    document.label = document_label
+        else:
+            # `document.label` will be used as document label.
+            bp, pi = self.viterbi_forward_pass(document, document_label=None)
 
-        last_sentence_label_index = np.where(pi_best[n - 1] == pi_best[n - 1].max())
-        document.sentences[n - 1].label = SENTENCE_LABELS[last_sentence_label_index[0][0]]
+        # Backward pass: assign optimal sentence labels using calculated `pi` and `bp`.
+        last_sentence_label_index = np.where(pi[-1] == pi[-1].max())
+        document.sentences[-1].label = SENTENCE_LABELS[last_sentence_label_index[0][0]]
+        for k in range(nr_sentences - 2, -1, -1):
+            document.sentences[k].label = bp[k + 1, SENTENCE_LABELS.index(document.sentences[k + 1].label)]
 
-        for k in range(n - 2, -1, -1):
-            document.sentences[k].label = int(bp_best[k + 1, SENTENCE_LABELS.index(document.sentences[k + 1].label)])
-
-    def viterbi_on_sentences(self, document: Document):
-        n = document.count_sentences()
-        bp, pi = self.viterbi_on_document_label(document, document_label=None)
-
-        last_sentence_label_index = np.where(pi[n - 1] == pi[n - 1].max())
-        document.sentences[n - 1].label = SENTENCE_LABELS[last_sentence_label_index[0][0]]
-
-        for k in range(n - 2, -1, -1):
-            document.sentences[k].label = int(bp[k + 1, SENTENCE_LABELS.index(document.sentences[k + 1].label)])
-
-    def viterbi_on_document_label(self, document: Document, document_label):
+    def viterbi_forward_pass(self, document: Document, document_label=None):
         assert document_label is None or document_label in DOCUMENT_LABELS
 
-        n = document.count_sentences()
+        nr_sentences = document.count_sentences()
         count_labels = len(SENTENCE_LABELS)
-        pi = np.zeros((n, count_labels))
-        bp = np.zeros((n, count_labels))
+        pi = np.zeros((nr_sentences, count_labels))
+        bp = np.zeros((nr_sentences, count_labels), dtype=int)
+
         for k, sentence in enumerate(document.sentences):
             for v_index, v in enumerate(SENTENCE_LABELS):
                 if k == 0:
@@ -75,6 +74,7 @@ class SentimentModelTester:
                             for t_index, t in enumerate(SENTENCE_LABELS)]
                     pi[k, v_index] = np.amax(pi_q)
                     bp[k, v_index] = SENTENCE_LABELS[np.argmax(pi_q)]
+
         return bp, pi
 
     def document_predict(self, corpus: Corpus):
@@ -103,6 +103,8 @@ class SentimentModelTester:
                     sentence.label = sentence_label
 
     def inference(self):
+        assert self.w is not None
+
         start_time = time.time()
 
         if self.model == DOCUMENT_CLASSIFIER:
@@ -112,18 +114,11 @@ class SentimentModelTester:
             for document in self.corpus.documents:
                 self.sentence_predict(document)
 
-        elif self.model == SENTENCE_STRUCTURED:
+        elif self.model in {SENTENCE_STRUCTURED, STRUCTURED_JOINT}:
             pb = ProgressBar(len(self.corpus.documents))
             for i, document in enumerate(self.corpus.documents):
                 pb.start_next_task()
-                self.viterbi_on_sentences(document)
-            pb.finish()
-
-        elif self.model == STRUCTURED_JOINT:
-            pb = ProgressBar(len(self.corpus.documents))
-            for i, document in enumerate(self.corpus.documents):
-                pb.start_next_task()
-                self.viterbi_on_document(document)
+                self.viterbi_inference(document, infer_document_label=(self.model == STRUCTURED_JOINT))
             pb.finish()
 
         print("Inference done: {0:.3f} seconds".format(time.time() - start_time))
@@ -133,6 +128,8 @@ class SentimentModelTester:
         self.w = np.loadtxt(path + model_name)
 
     def evaluate_model(self, ground_truth: Corpus):
+        assert self.w is not None
+
         if self.model == SENTENCE_CLASSIFIER:
             sentences_results = {
                 "correct": 0,

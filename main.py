@@ -88,7 +88,7 @@ def main():
         tester.inference()
 
         evaluation_set_ground_truth = evaluation_dataset.clone()
-        print(tester.evaluate_model(evaluation_set_ground_truth, config.model_type))
+        print(tester.evaluate_model(evaluation_set_ground_truth))
         # tester.print_results_to_file(tagged_test_set, model_name, is_test=True)
         tester.confusion_matrix(evaluation_set_ground_truth, config.model_name)
         # tester.confusion_matrix_ten_max_errors(model_name, is_test=True)
