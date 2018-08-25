@@ -1,4 +1,7 @@
-from classes import Corpus, FeatureVector, Train, Test
+from corpus import Corpus
+from feature_vector import FeatureVector
+from sentiment_model_trainer import SentimentModelTrainer
+from sentiment_model_tester import SentimentModelTester
 from config import Config
 from collections import namedtuple
 from utils import print_title
@@ -54,7 +57,7 @@ def main():
     config = Config()
     dataset = load_dataset(config)
     feature_vector = FeatureVector(dataset.train)
-    trainer = Train(dataset.train.clone(), feature_vector, model=config.model_type)
+    trainer = SentimentModelTrainer(dataset.train.clone(), feature_vector, model=config.model_type)
     trainer.generate_features()
 
     print('Model name: ' + config.model_name)
@@ -77,9 +80,9 @@ def main():
     for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
         print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
         if config.perform_train:
-            tester = Test(evaluation_dataset.clone(), feature_vector, config.model_type, w=trainer.w)
+            tester = SentimentModelTester(evaluation_dataset.clone(), feature_vector, config.model_type, w=trainer.w)
         else:
-            tester = Test(evaluation_dataset.clone(), feature_vector, config.model_type)
+            tester = SentimentModelTester(evaluation_dataset.clone(), feature_vector, config.model_type)
             tester.load_model(config.model_weights_filename)
 
         tester.inference()

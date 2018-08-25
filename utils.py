@@ -25,7 +25,7 @@ class ProgressBar:
 
     def finish(self):
         self.curr_task = None
-        self.curr_task_title = 'Total time: {0:.3f} seconds'.format(time.time() - self.start_time)
+        self.curr_task_title = ''
         self.print_status()
 
     def print_status(self, curr_task_title=None):
@@ -44,7 +44,8 @@ class ProgressBar:
                              curr_task_title_w_padding))
         else:
             # last step (verify 100% is printed and print new line in the end):
-            sys.stdout.write("[%-50s] Done: %d%% out of %d\n" % ('=' * 50, 100, self.nr_tasks))
+            sys.stdout.write("[%-50s] Done: %d%% out of %d. " % ('=' * 50, 100, self.nr_tasks))
+            sys.stdout.write("Total time: {0:.3f} seconds.\n".format(time.time() - self.start_time))
         sys.stdout.flush()
 
 
