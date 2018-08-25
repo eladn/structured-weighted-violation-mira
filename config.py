@@ -7,8 +7,8 @@ class Config:
     evaluate_over_train_set = True
     evaluate_over_test_set = True
 
-    mira_best_k_labeling_method = 'viterbi'  # in {'rand', 'viterbi', 'rand-and-viterbi'}
-    mira_k = 1
+    mira_k_random_labelings = 1
+    mira_k_best_viterbi_labelings = 2
     mira_iterations = 5
 
     docs_train_filename_base_wo_ext = "train-0.6p"
@@ -48,9 +48,13 @@ class Config:
     def model_name(self):
         if hasattr(self, '__model_name'):
             return self.__model_name
-        self.__model_name = "{model_type}__k{k}__iter{iter}__kbest={kbest}__train-set={data_filename}__{data_hash}".format(
-            model_type=self.model_type, k=self.mira_k, iter=self.mira_iterations, kbest=self.mira_best_k_labeling_method,
-            data_filename=self.docs_train_filename_base_wo_ext, data_hash=self.train_data_hash[:8]
+        self.__model_name = "{model_type}__k-rnd={k_rnd}__k-viterbi={k_viterbi}__iter={iter}__train-set={data_filename}__{data_hash}".format(
+            model_type=self.model_type,
+            k_rnd=self.mira_k_random_labelings,
+            k_viterbi=self.mira_k_best_viterbi_labelings,
+            iter=self.mira_iterations,
+            data_filename=self.docs_train_filename_base_wo_ext,
+            data_hash=self.train_data_hash[:8]
         )
         return self.__model_name
 

@@ -72,3 +72,31 @@ def hash_file(file_paths: Union[AnyStr, Iterable[AnyStr]], hash_type='sha1'):
                     break
                 hasher_func.update(data)
     return hasher_func.hexdigest()
+
+
+def get_sorted_highest_k_elements_in_matrix(matrix: np.ndarray, top_k: int):
+    assert(matrix.size >= top_k)
+
+    # Find (flattened) indeces of top_k elements with highest score in the input `matrix`,
+    #   (out of its elements).
+    # What is a "FLATTENED" index?
+    #   For example, in the matrix [[8 3 1] [7 9 4]], the flattened index of the element `9` is 4.
+    # Why do we use flattened indeces and not simply (i,j) indeces (this is a matrix)?
+    #   It is just much simpler to perform the following tasks with a single value index.
+    # Time complexity: linear! O(matrix.size)
+    top_k_flattened_indexes = np.argpartition(matrix, -top_k, axis=None)[-top_k:]
+
+    # Find the scores of the actual top_k elements.
+    top_k_elements = matrix.flat[top_k_flattened_indexes]
+
+    # Now lets sort these best found top_k elements by their score (descending order).
+    # Time complexity: O(top_k * log(top_k))
+    # Notice: Out of matrix.size elements we found and sorted the best top_k elements
+    #   using time complexity (matrix.size) + (top_k * log(top_k)), which is optimal.
+    top_k_elements_sorting_flattened_indexes = np.argsort(top_k_elements, kind='heapsort')[::-1]
+    top_k_flattened_indexes_sorted = top_k_flattened_indexes[top_k_elements_sorting_flattened_indexes]
+    top_k_elements_sorted = top_k_elements[top_k_elements_sorting_flattened_indexes]
+    top_k_row_indexes_sorted = top_k_flattened_indexes_sorted // top_k
+    top_k_col_indexes_sorted = top_k_flattened_indexes_sorted % top_k
+
+    return top_k_row_indexes_sorted, top_k_col_indexes_sorted, top_k_elements_sorted

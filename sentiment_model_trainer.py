@@ -65,11 +65,13 @@ class SentimentModelTrainer:
         return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)),
                           shape=(document.count_sentences() - 1, self.feature_vector.count_features()))  # TODO
 
-    def mira_algorithm(self, iterations=5, k=10, best_k_labeling_method='rand'):
-        assert best_k_labeling_method in {'rand', 'viterbi', 'rand-and-viterbi'}
-
+    def mira_algorithm(self, iterations=5, k_best_viterbi_labelings=2, k_random_labelings=0):
         optimization_time = time.time()
-        print_title("Training model: {}, k = {}, iterations = {}".format(self.model, k, iterations))
+        print_title("Training model: {model}, k-best-viterbi = {k_viterbi}, k-random = {k_rnd}, iterations = {iter}".format(
+            model=self.model,
+            k_viterbi=k_best_viterbi_labelings,
+            k_rnd=k_random_labelings,
+            iter=iterations))
         pb = ProgressBar(iterations * len(self.corpus.documents))
         tester = SentimentModelTester(self.corpus.clone(), self.feature_vector, self.model)
         for cur_iter in range(1, iterations+1):
@@ -79,14 +81,12 @@ class SentimentModelTrainer:
                 )
                 pb.start_next_task(task_str)
 
-                k_per_labeling_method = k // (1 if best_k_labeling_method != 'rand-and-viterbi' else 2)
                 c = []
-                if best_k_labeling_method == 'rand' or best_k_labeling_method == 'rand-and-viterbi':
-                    c = self.extract_random_labeling_subset(document, k_per_labeling_method, use_document_tag=False)
-                if best_k_labeling_method == 'viterbi' or best_k_labeling_method == 'rand-and-viterbi':
+                if k_random_labelings > 0:
+                    c = self.extract_random_labeling_subset(document, k_random_labelings, use_document_tag=False)
+                if k_best_viterbi_labelings > 0:
                     tester.w = self.w
-                    labelings = tester.viterbi_inference(test_document, top_k=k_per_labeling_method)
-                    # labels = [test_document.label] + [sentence.label for sentence in test_document.sentences]
+                    labelings = tester.viterbi_inference(test_document, top_k=k_best_viterbi_labelings)
                     c += labelings
                     shuffle(c)
                 assert(len(c) >= 1)

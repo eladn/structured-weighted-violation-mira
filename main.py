@@ -67,8 +67,9 @@ def main():
         shuffle(trainer.corpus.documents)
 
         trainer.evaluate_feature_vectors()
-        trainer.mira_algorithm(iterations=config.mira_iterations, k=config.mira_k,
-                               best_k_labeling_method=config.mira_best_k_labeling_method)
+        trainer.mira_algorithm(iterations=config.mira_iterations,
+                               k_best_viterbi_labelings=config.mira_k_best_viterbi_labelings,
+                               k_random_labelings=config.mira_k_random_labelings)
         trainer.save_model(config.model_weights_filename)
 
     evaluation_datasets = []
