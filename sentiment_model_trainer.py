@@ -65,12 +65,6 @@ class SentimentModelTrainer:
         return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)),
                           shape=(document.count_sentences() - 1, self.feature_vector.count_features()))  # TODO
 
-    def loss(self, w, w_i):
-        return np.sum((w - w_i) ** 2)
-
-    def gradient(self, w, w_i):
-        return 2 * np.sum(w - w_i)
-
     def mira_algorithm(self, iterations=5, k=10, best_k_labeling_method='rand'):
         assert best_k_labeling_method in {'rand', 'viterbi', 'rand-and-viterbi'}
 
