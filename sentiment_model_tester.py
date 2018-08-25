@@ -39,9 +39,10 @@ class SentimentModelTester:
     # the maximal total document score will be assigned to `document.label`.
     def viterbi_inference(self, document: Document, infer_document_label: bool=True, top_k: int=7, assign_best_labeling=True):
         nr_sentences = document.count_sentences()
-        bp, pi = None, None
+        assert(NR_SENTENCE_LABELS ** nr_sentences >= top_k)
 
         # Forward pass: calculate `pi` and `bp`.
+        bp, pi = None, None
         if infer_document_label:
             for document_label in DOCUMENT_LABELS:
                 cur_bp, cur_pi = self.viterbi_forward_pass(document, document_label=document_label, top_k=top_k)
