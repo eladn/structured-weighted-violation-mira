@@ -17162,7 +17162,6 @@
 -1	they_PRP 'll_MD never_RB catch_VB me_PRP in_IN a_DT car_NN chase_NN ._.
 
 -1	this_DT film_NN is_VBZ extraordinarily_RB horrendous_JJ and_CC i_JJ 'm_VBP not_RB going_VBG to_TO waste_VB any_DT more_JJR words_NNS on_IN it_PRP ._.
-
 -1	i_JJ think_VBP of_IN i_NN know_VBP what_WP you_PRP did_VBD last_JJ summer_NN as_IN the_DT movie_NN that_WDT scream_NN and_CC scream_NN 2_CD could_MD have_VB been_VBN ._.
 -1	mind_NN you_PRP ,_, though_IN ,_, i_JJ mean_VBP this_DT in_IN the_DT worst_JJS possible_JJ way_NN ._.
 1	i_NN know_VBP what_WP you_PRP did_VBD last_JJ summer_NN is_VBZ a_DT typical_JJ slasher_NN flic_NN without_IN the_DT smarts_NNS of_IN the_DT scream_NN 's_POS ._.
