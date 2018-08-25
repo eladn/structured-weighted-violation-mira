@@ -120,7 +120,7 @@ class SentimentModelTester:
                     best_sentence_score = temp_sentence_score
                     sentence.label = sentence_label
 
-    def inference(self, verbose: bool=True):
+    def inference(self):
         start_time = time.time()
 
         if self.model == DOCUMENT_CLASSIFIER:
@@ -131,15 +131,20 @@ class SentimentModelTester:
                 self.sentence_predict(document, self.model)
 
         elif self.model == SENTENCE_STRUCTURED:
+            pb = ProgressBar(len(self.corpus.documents))
             for i, document in enumerate(self.corpus.documents):
-                self.viterbi_on_sentences(document, i, self.model, verbose=verbose)
+                pb.start_next_task()
+                self.viterbi_on_sentences(document, i, self.model)
+            pb.finish()
 
         elif self.model == STRUCTURED_JOINT:
+            pb = ProgressBar(len(self.corpus.documents))
             for i, document in enumerate(self.corpus.documents):
+                pb.start_next_task()
                 self.viterbi_on_document(document, i, self.model)
+            pb.finish()
 
-        if verbose:
-            print("inference done: {0:.3f} seconds".format(time.time() - start_time))
+        print("inference done: {0:.3f} seconds".format(time.time() - start_time))
 
     def load_model(self, model_name):
         path = MODELS_PATH
