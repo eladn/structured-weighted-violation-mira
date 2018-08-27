@@ -76,6 +76,7 @@ def hash_file(file_paths: Union[AnyStr, Iterable[AnyStr]], hash_type='sha1'):
 
 def get_sorted_highest_k_elements_in_matrix(matrix: np.ndarray, top_k: int):
     assert(matrix.size >= top_k)
+    assert(len(matrix.shape) == 2)
 
     # Find (flattened) indeces of top_k elements with highest score in the input `matrix`,
     #   (out of its elements).

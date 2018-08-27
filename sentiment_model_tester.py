@@ -139,13 +139,13 @@ class SentimentModelTester:
                 # Find indeces (and values) of top_k elements with highest score in the above created matrix.
                 # Notice: Out of (NR_SENTENCE_LABELS * top_k) elements we find and sort the best top_k elements
                 #   using time complexity (NR_SENTENCE_LABELS * top_k) + (top_k * log(top_k)), which is optimal.
-                top_k_row_indexes_sorted, top_k_col_indexes_sorted, top_k_elements_sorted = \
+                top_k_label_indeces, top_k_ranks, top_k_elements_sorted = \
                     get_sorted_highest_k_elements_in_matrix(total_scores_per_pre_sentence_label_and_rank, top_k)
 
                 # Update the dynamic-programming intermediate results arrays (scores and back-pointer).
                 pi[sentence_idx, sentence_label_idx, :] = top_k_elements_sorted
-                bp[sentence_idx, sentence_label_idx, :, 0] = top_k_row_indexes_sorted
-                bp[sentence_idx, sentence_label_idx, :, 1] = top_k_col_indexes_sorted
+                bp[sentence_idx, sentence_label_idx, :, 0] = top_k_label_indeces
+                bp[sentence_idx, sentence_label_idx, :, 1] = top_k_ranks
 
         return bp, pi
 

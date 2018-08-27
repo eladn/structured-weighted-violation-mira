@@ -20,11 +20,12 @@ from sentence import Sentence
 from feature_vector import FeatureVector
 from sentiment_model_tester import SentimentModelTester
 from utils import ProgressBar, print_title
+from config import Config
 
 
 class SentimentModelTrainer:
-    def __init__(self, corpus: Corpus, feature_vector: FeatureVector, model):
-        assert model in MODELS
+    def __init__(self, corpus: Corpus, feature_vector: FeatureVector, config: Config):
+        assert config.verify()
         if DEBUG:
             if not isinstance(corpus, Corpus):
                 raise Exception('The corpus argument is not a Corpus object')
@@ -33,11 +34,11 @@ class SentimentModelTrainer:
         self.empirical_counts = None
         self.evaluated_feature_vectors = []
         self.w = None
-        self.model = model
+        self.config = config
 
     def generate_features(self):
         start_time = time.time()
-        self.feature_vector.initialize_features(self.model)
+        self.feature_vector.initialize_features(self.config.model_type)
         self.w = np.zeros(self.feature_vector.count_features())
         print("generate_feature done: {0:.3f} seconds".format(time.time() - start_time))
         print("Features count: {}".format(self.feature_vector.count_features()))
@@ -45,9 +46,11 @@ class SentimentModelTrainer:
     def evaluate_feature_vectors(self):
         start_time = time.time()
         print("Evaluating features")
+        pb = ProgressBar(len(self.corpus.documents))
         for doc_index, document in enumerate(self.corpus.documents, start=1):
+            pb.start_next_task()
             self.evaluated_feature_vectors.append(self.evaluate_document_feature_vector(document))
-            print("Document #{} evaluated features".format(doc_index), end='\r')
+        pb.finish()
         print("evaluate_feature_vectors done: {0:.3f} seconds".format(time.time() - start_time))
 
     def evaluate_document_feature_vector(self, document: Document, y_tag=None):
@@ -58,7 +61,7 @@ class SentimentModelTrainer:
             y_sentence = y_tag[sentence_index + 1] if y_tag is not None else None
             y_pre_sentence = y_tag[sentence_index] if y_tag is not None else None
             feature_indices = self.feature_vector.evaluate_clique_feature_vector(
-                document, sentence_index, self.model, y_document, y_sentence, y_pre_sentence)
+                document, sentence_index, self.config.model_type, y_document, y_sentence, y_pre_sentence)
             col_ind += feature_indices
             row_ind += [sentence_index - 1 for _ in feature_indices]
 
@@ -68,12 +71,12 @@ class SentimentModelTrainer:
     def mira_algorithm(self, iterations=5, k_best_viterbi_labelings=2, k_random_labelings=0):
         optimization_time = time.time()
         print_title("Training model: {model}, k-best-viterbi = {k_viterbi}, k-random = {k_rnd}, iterations = {iter}".format(
-            model=self.model,
+            model=self.config.model_type,
             k_viterbi=k_best_viterbi_labelings,
             k_rnd=k_random_labelings,
             iter=iterations))
         pb = ProgressBar(iterations * len(self.corpus.documents))
-        tester = SentimentModelTester(self.corpus.clone(), self.feature_vector, self.model)
+        tester = SentimentModelTester(self.corpus.clone(), self.feature_vector, self.config.model_type)
         for cur_iter in range(1, iterations+1):
             for doc_idx, (document, test_document, feature_vectors) in enumerate(zip(self.corpus.documents, tester.corpus.documents, self.evaluated_feature_vectors)):
                 task_str = 'iter: {cur_iter}/{nr_iters} -- document: {cur_doc}/{nr_docs}'.format(
@@ -116,20 +119,27 @@ class SentimentModelTrainer:
                 G = y_tag_fv - y_fv
             else:
                 G = np.vstack((G, y_tag_fv - y_fv))
+
             # y_tag_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]])
             y_tag_document_loss = zero_one_loss([y[0]], [y_tag[0]])
             y_tag_sentences_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:])
             # y_tag_loss = y_tag_sentences_loss * y_tag_document_loss  # original loss
+
             y_tag_loss = y_tag_sentences_loss
-            if self.model in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}:
-                y_tag_loss += y_tag_document_loss
+
+            if self.config.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}:
+                if self.config.loss_type == 'mult':
+                    y_tag_loss *= y_tag_document_loss
+                elif self.config.loss_type == 'plus':
+                    y_tag_loss += self.config.doc_loss_factor * y_tag_document_loss
+
             h.append(-y_tag_loss)
         G = csr_matrix(G)
         h = np.array(h).reshape(len(c), )
         return M, q.reshape((self.feature_vector.count_features()), ), G, h
 
     @staticmethod
-    def extract_random_labeling_subset(document: Document, k: int, use_document_tag: bool=False):  # TODO use viterbi to find the best c
+    def extract_random_labeling_subset(document: Document, k: int, use_document_tag: bool=False):
         return [
             [document.label if use_document_tag else random.choice(DOCUMENT_LABELS)] +
             [random.choice(SENTENCE_LABELS) for _ in range(document.count_sentences())]
