@@ -2,7 +2,7 @@ from tagged_word import TaggedWord
 
 
 class Sentence:
-    def __init__(self, sentence: str, insert_sec_labels: bool):
+    def __init__(self, sentence: str, insert_sec_labels: bool, index=None):
         self.tokens = []
         splitted_sec = sentence.split("\t")
         if insert_sec_labels:
@@ -11,11 +11,18 @@ class Sentence:
             self.label = None
         words = "\t".join(splitted_sec[1:])
         self.tokens = [TaggedWord(word_tag=token) for token in Sentence.split_cleaned_line(words)]
+        self.index = index
+
+        # TODO: doc!
+        self.feature_attributes_idxs = None
+        self.features = None
 
     def clone(self):
-        new_sentence = Sentence('-1\ttv_NN', False)
+        new_sentence = Sentence('-1\ttv_NN', False, self.index)
         new_sentence.label = self.label
         new_sentence.tokens = [tagged_word.clone() for tagged_word in self.tokens]
+        new_sentence.feature_attributes_idxs = self.feature_attributes_idxs
+        new_sentence.features = self.features
         return new_sentence
 
     @staticmethod

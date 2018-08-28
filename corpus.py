@@ -29,6 +29,8 @@ class Corpus:
                     continue
                 else:
                     document.load_sentence(line, insert_sentence_labels)
+        for document_idx, document in enumerate(self.documents):
+            document.index = document_idx
 
     def count_documents(self):
         return np.size(self.documents)
@@ -41,4 +43,9 @@ class Corpus:
 
     def __str__(self):
         return "\n".join([str(document) for document in self.documents])
+
+    def __iter__(self):
+        for document_idx, document in enumerate(self.documents):
+            for sentence_idx, sentence in enumerate(document.sentences):
+                yield document, sentence
 
