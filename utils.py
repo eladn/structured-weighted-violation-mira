@@ -122,3 +122,22 @@ def shuffle_iter(*arrays):
     np.random.shuffle(idxs)
     for idx in idxs:
         yield tuple((arr[idx] for arr in arrays))
+
+
+def shuffle_iterate_over_batches(*arrays, batch_size: int = None, shuffle: bool = True):
+    assert (len(arrays) >= 1)
+
+    nr_elements = len(arrays[0])
+    assert (all(len(array) == nr_elements for array in arrays))
+    if batch_size is None:
+        batch_size = 1
+
+    shuffled_indeces = np.arange(nr_elements)
+    if shuffle:
+        np.random.shuffle(shuffled_indeces)
+
+    for batch_start_idx in range(0, nr_elements, batch_size):
+        indeces = shuffled_indeces[batch_start_idx: min(nr_elements, batch_start_idx + batch_size)]
+        batch = (array[indeces] if isinstance(array, np.ndarray) else list(array[idx] for idx in indeces) for array in
+                 arrays)
+        yield (batch_start_idx,) + tuple(batch)

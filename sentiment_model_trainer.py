@@ -19,7 +19,7 @@ from document import Document
 from sentence import Sentence
 from corpus_features_vector import CorpusFeaturesVector
 from sentiment_model_tester import SentimentModelTester
-from utils import ProgressBar, print_title, shuffle_iter
+from utils import ProgressBar, print_title, shuffle_iterate_over_batches
 from config import Config
 
 
@@ -76,30 +76,35 @@ class SentimentModelTrainer:
             k_viterbi=k_best_viterbi_labelings,
             k_rnd=k_random_labelings,
             iter=iterations))
-        pb = ProgressBar(iterations * len(self.corpus.documents))
+        nr_batchs_per_iteration = int(np.ceil(len(self.corpus.documents) / self.config.mira_batch_size))
+        pb = ProgressBar(iterations * nr_batchs_per_iteration)
         tester = SentimentModelTester(self.corpus.clone(), self.features_vector, self.config.model_type)
         for cur_iter in range(1, iterations+1):
-            for document_nr, (document, test_document, feature_vectors) \
-                in enumerate(shuffle_iter(self.corpus.documents,
+            for document_nr, (batch_start_idx, documents_batch, test_documents_batch, feature_vectors_batch) \
+                in enumerate(shuffle_iterate_over_batches(self.corpus.documents,
                                           tester.corpus.documents,
-                                          self.evaluated_feature_vectors), start=1):
+                                          self.evaluated_feature_vectors,
+                                          batch_size=self.config.mira_batch_size), start=1):
                 task_str = 'iter: {cur_iter}/{nr_iters} -- document: {cur_doc}/{nr_docs}'.format(
-                    cur_iter=cur_iter, nr_iters=iterations, cur_doc=document_nr+1, nr_docs=len(self.corpus.documents)
+                    cur_iter=cur_iter, nr_iters=iterations, cur_doc=batch_start_idx+1, nr_docs=len(self.corpus.documents)
                 )
                 pb.start_next_task(task_str)
 
-                c = []
-                if k_random_labelings > 0:
-                    c = self.extract_random_labeling_subset(document, k_random_labelings, use_document_tag=False)
-                if k_best_viterbi_labelings > 0:
-                    tester.w = self.w
-                    top_k = min(k_best_viterbi_labelings, NR_SENTENCE_LABELS ** document.count_sentences())
-                    labelings = tester.viterbi_inference(test_document, top_k=top_k)
-                    c += labelings
-                    shuffle(c)
-                assert(len(c) >= 1)
+                mira_labelings_batch = []
+                for document, test_document in zip(documents_batch, test_documents_batch):
+                    labelings = []
+                    if k_random_labelings > 0:
+                        labelings = self.extract_random_labeling_subset(document, k_random_labelings, use_document_tag=False)
+                    if k_best_viterbi_labelings > 0:
+                        tester.w = self.w
+                        top_k = min(k_best_viterbi_labelings, NR_SENTENCE_LABELS ** document.count_sentences())
+                        labelings = tester.viterbi_inference(test_document, top_k=top_k)
+                        labelings += labelings
+                        shuffle(labelings)
+                    assert(len(labelings) >= 1)
+                    mira_labelings_batch.append(labelings)
 
-                P, q, G, h = self.extract_qp_matrices(document, feature_vectors, document.y(), c)
+                P, q, G, h = self.extract_qp_matrices(documents_batch, feature_vectors_batch, mira_labelings_batch)
                 w = solve_qp(P, q, G, h, solver="osqp")
                 if np.any(np.equal(w, None)):
                     print(file=sys.stderr)
@@ -110,37 +115,41 @@ class SentimentModelTrainer:
         pb.finish()
         print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
 
-    def extract_qp_matrices(self, document: Document, feature_vectors, y, c):
+    def extract_qp_matrices(self, documents_batch, feature_vectors_batch, mira_labelings_batch):
         M = sparse.eye(self.features_vector.size)
         q = np.copy(self.w) * -1
-        y_fv = feature_vectors.sum(axis=0)
-        y_fv = np.asarray(y_fv).reshape((y_fv.shape[1],))
-        G = None
+        nr_labelings = sum(len(labelings) for labelings in mira_labelings_batch)
+        G = np.zeros((nr_labelings, self.features_vector.size))
         h = []
-        for y_tag in c:
-            y_tag_fv = self.evaluate_document_feature_vector(document, y_tag).sum(axis=0)
-            y_tag_fv = np.asarray(y_tag_fv)
-            if G is None:
-                G = y_tag_fv - y_fv
-            else:
-                G = np.vstack((G, y_tag_fv - y_fv))
 
-            # y_tag_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]])
-            y_tag_document_loss = zero_one_loss([y[0]], [y_tag[0]])
-            y_tag_sentences_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:])
-            # y_tag_loss = y_tag_sentences_loss * y_tag_document_loss  # original loss
+        next_G_line_idx = 0
+        for document, feature_vectors, mira_labelings in zip(documents_batch, feature_vectors_batch, mira_labelings_batch):
+            y = document.y()
+            y_fv = feature_vectors.sum(axis=0)
+            y_fv = np.asarray(y_fv).reshape((y_fv.shape[1],))
+            for y_tag in mira_labelings:
+                y_tag_fv = self.evaluate_document_feature_vector(document, y_tag).sum(axis=0)
+                y_tag_fv = np.asarray(y_tag_fv)
 
-            y_tag_loss = y_tag_sentences_loss
+                G[next_G_line_idx, :] = (y_tag_fv - y_fv)
+                next_G_line_idx += 1
 
-            if self.config.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}:
-                if self.config.loss_type == 'mult':
-                    y_tag_loss *= y_tag_document_loss
-                elif self.config.loss_type == 'plus':
-                    y_tag_loss += self.config.doc_loss_factor * y_tag_document_loss
+                # y_tag_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]])
+                y_tag_document_loss = zero_one_loss([y[0]], [y_tag[0]])
+                y_tag_sentences_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:])
+                # y_tag_loss = y_tag_sentences_loss * y_tag_document_loss  # original loss
 
-            h.append(-y_tag_loss)
+                y_tag_loss = y_tag_sentences_loss
+
+                if self.config.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}:
+                    if self.config.loss_type == 'mult':
+                        y_tag_loss *= y_tag_document_loss
+                    elif self.config.loss_type == 'plus':
+                        y_tag_loss += self.config.doc_loss_factor * y_tag_document_loss
+
+                h.append(-y_tag_loss)
         G = csr_matrix(G)
-        h = np.array(h).reshape(len(c), )
+        h = np.array(h).reshape(-1, )
         return M, q.reshape(self.features_vector.size, ), G, h
 
     @staticmethod
