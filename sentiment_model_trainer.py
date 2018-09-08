@@ -13,7 +13,7 @@ from warnings import warn
 import sys
 
 from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
-    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, MODELS, TEST_PATH
+    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, MODELS, TEST_PATH, NR_SENTENCE_LABELS
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
@@ -93,7 +93,8 @@ class SentimentModelTrainer:
                     c = self.extract_random_labeling_subset(document, k_random_labelings, use_document_tag=False)
                 if k_best_viterbi_labelings > 0:
                     tester.w = self.w
-                    labelings = tester.viterbi_inference(test_document, top_k=k_best_viterbi_labelings)
+                    top_k = min(k_best_viterbi_labelings, NR_SENTENCE_LABELS ** document.count_sentences())
+                    labelings = tester.viterbi_inference(test_document, top_k=top_k)
                     c += labelings
                     shuffle(c)
                 assert(len(c) >= 1)
