@@ -2,14 +2,69 @@ from constants import *
 from utils import hash_file
 
 
+class ConfigurationOptionPrinter:
+    def __init__(self,
+                 attribute: str=None,
+                 name: str=None,
+                 description: str=None,
+                 value_type=None,
+                 print_condition=None,
+                 print_iff_not_none: bool=False,
+                 print_iff_true: bool=False,
+                 print_value_format_str=None,
+                 print_value_function=None,
+                 name_value_separator: str=None):
+
+        if print_value_format_str is not None and print_value_function is not None:
+            raise RuntimeError(
+                'ConfigurationOption constructor: Cannot specify both `print_value_format_str` and `print_value_function`.')
+        if bool(print_condition is not None) + bool(print_iff_not_none) + bool(print_iff_true) > 1:
+            raise RuntimeError(
+                'ConfigurationOption constructor: Cannot specify more than one of: `print_condition`, `print_iff_not_none` and `print_iff_true`.')
+        if attribute is None and print_value_function is None:
+            raise RuntimeError(
+                'ConfigurationOption constructor: Cannot specify neither `attribute` nor `print_value_function`.')
+
+        self.name_value_separator = str(name_value_separator) if name_value_separator is not None else '='
+        self.attribute = attribute
+        self.name = name
+        self.description = description
+        self.value_type = value_type
+        self.print_condition = print_condition
+        self.print_iff_not_none = print_iff_not_none
+        self.print_iff_true = print_iff_true
+        self.print_value_format_str = print_value_format_str
+        self.print_value_function = print_value_function
+
+    def print(self, config):
+        if self.attribute and not hasattr(config, self.attribute):
+            return ''
+        value = getattr(config, self.attribute) if isinstance(self.attribute, str) else None
+        if self.print_iff_not_none and value is None:
+            return ''
+        if self.print_iff_true and not value:
+            return ''
+        if self.print_condition is not None and not self.print_condition(value, config):
+            return ''
+        name_and_separator = (str(self.name) + self.name_value_separator) if self.name else ''
+        if self.print_value_function is not None:
+            return name_and_separator + self.print_value_function(value, config)
+        print_fmt = '{}'
+        if self.print_value_format_str is not None:
+            print_fmt = '{' + str(self.print_value_format_str) + '}'
+        printed_value = print_fmt.format(value)
+        return name_and_separator + printed_value
+
+
 class Config:
     perform_train = True
     evaluate_over_train_set = True
     evaluate_over_test_set = True
 
     mira_k_random_labelings = 0
-    mira_k_best_viterbi_labelings = 5
+    mira_k_best_viterbi_labelings = 7
     mira_iterations = 5
+    mira_batch_size = 8
 
     loss_type = 'plus'  # {'mult', 'plus'}
     doc_loss_factor = 1.2
@@ -49,16 +104,20 @@ class Config:
             DATA_PATH + self.neg_docs_train_filename), hash_type='md5')
         return self.__train_data_hash
 
+    corpus_configurations = (
+        ConfigurationOptionPrinter(attribute='docs_train_filename_base_wo_ext', name='corpus'),
+        ConfigurationOptionPrinter(attribute='model_type', name='model'),
+        ConfigurationOptionPrinter(attribute='min_nr_feature_occurrences', name='min-feature-occ',
+                                   print_iff_true=True),
+        ConfigurationOptionPrinter(attribute='train_data_hash')
+    )
+
     @property
     def train_corpus_feature_vector_filename(self):
-        min_nr_feature_occurrences = 'min-feature-occ={}__'.format(self.min_nr_feature_occurrences) \
-            if hasattr(self, 'min_nr_feature_occurrences') and self.min_nr_feature_occurrences is not None else ''
-        return 'corpus-feature-vector__{train}__model={model_type}__{min_nr_feature_occurrences}{hash}.pkl'.format(
-            train=self.docs_train_filename_base_wo_ext,
-            model_type=self.model_type,
-            min_nr_feature_occurrences=min_nr_feature_occurrences,
-            hash=self.train_data_hash
-        )
+        if not hasattr(self, '__train_corpus_feature_vector_filename') or not self.__train_corpus_feature_vector_filename:
+            self.__train_corpus_feature_vector_filename = 'corpus-feature-vector__' + '__'.join(
+                filter(bool, (conf.print(self) for conf in self.corpus_configurations)))
+        return self.__train_corpus_feature_vector_filename
 
     @property
     def loss_type_str(self):
@@ -67,22 +126,25 @@ class Config:
             loss_type_str += str(self.doc_loss_factor)
         return loss_type_str
 
+    model_configurations = (
+        ConfigurationOptionPrinter(attribute='model_type', name='model'),
+        ConfigurationOptionPrinter(attribute='mira_k_random_labelings', name='k-rnd', print_iff_true=True),
+        ConfigurationOptionPrinter(attribute='mira_k_best_viterbi_labelings', name='k-viterbi', print_iff_true=True),
+        ConfigurationOptionPrinter(attribute='mira_iterations', name='iter'),
+        ConfigurationOptionPrinter(attribute='mira_batch_size', name='batch',
+                                   print_condition=lambda value, _: value and int(value) > 1),
+        ConfigurationOptionPrinter(attribute='loss_type_str', name='loss',
+                                   print_condition=lambda _, config: config.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}),
+        ConfigurationOptionPrinter(attribute='min_nr_feature_occurrences', name='min-feature-occ',
+                                   print_iff_true=True),
+        ConfigurationOptionPrinter(attribute='docs_train_filename_base_wo_ext', name='train-set'),
+        ConfigurationOptionPrinter(attribute='train_data_hash')
+    )
+
     @property
     def model_name(self):
-        if hasattr(self, '__model_name'):
-            return self.__model_name
-        min_nr_feature_occurrences = 'min-feature-occ={}__'.format(self.min_nr_feature_occurrences) \
-            if hasattr(self, 'min_nr_feature_occurrences') and self.min_nr_feature_occurrences is not None else ''
-        self.__model_name = "{model_type}__k-rnd={k_rnd}__k-viterbi={k_viterbi}__iter={iter}__loss={loss}__train-set={data_filename}__{min_nr_feature_occurrences}{data_hash}".format(
-            model_type=self.model_type,
-            k_rnd=self.mira_k_random_labelings,
-            k_viterbi=self.mira_k_best_viterbi_labelings,
-            iter=self.mira_iterations,
-            loss=self.loss_type_str,
-            min_nr_feature_occurrences=min_nr_feature_occurrences,
-            data_filename=self.docs_train_filename_base_wo_ext,
-            data_hash=self.train_data_hash[:8]
-        )
+        if not hasattr(self, '__model_name') or not self.__model_name:
+            self.__model_name = '__'.join(filter(bool, (conf.print(self) for conf in self.model_configurations)))
         return self.__model_name
 
     @property
