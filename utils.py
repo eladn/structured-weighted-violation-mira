@@ -101,3 +101,24 @@ def get_sorted_highest_k_elements_in_matrix(matrix: np.ndarray, top_k: int):
     top_k_col_indexes_sorted = top_k_flattened_indexes_sorted % top_k
 
     return top_k_row_indexes_sorted, top_k_col_indexes_sorted, top_k_elements_sorted
+
+
+class _Singleton(type):
+    """ A metaclass that creates a Singleton base class when called. """
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(_Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class Singleton(_Singleton('SingletonMeta', (object,), {})):
+    pass
+
+
+def shuffle_iter(*arrays):
+    idxs = np.arange(0, len(arrays[0]))
+    np.random.shuffle(idxs)
+    for idx in idxs:
+        yield tuple((arr[idx] for arr in arrays))
