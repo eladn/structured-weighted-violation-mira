@@ -5,6 +5,7 @@ from sentiment_model_tester import SentimentModelTester
 from config import Config
 from collections import namedtuple
 from utils import print_title
+from constants import FEATURES_VECTORS_PATH
 
 import os
 import pickle
@@ -60,8 +61,8 @@ def load_dataset(config: Config, train_set: Corpus=None):
 def main():
     config = Config()
 
-    if False and os.path.isfile(config.train_corpus_feature_vector_filename):
-        with open(config.train_corpus_feature_vector_filename, 'rb') as f:
+    if os.path.isfile(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename):
+        with open(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename, 'rb') as f:
             features_vector = pickle.load(f)
         # dataset = load_dataset(config, features_vector.corpus)
         dataset = load_dataset(config)
@@ -70,7 +71,7 @@ def main():
         # feature_vector = FeatureVector(dataset.train)
         features_vector = CorpusFeaturesVector(config)
         features_vector.initialize_features(dataset.train)
-        with open(config.train_corpus_feature_vector_filename, 'wb') as f:
+        with open(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename, 'wb') as f:
             pickle.dump(features_vector, f)
 
     features_vector.initialize_corpus_features(dataset.train)
