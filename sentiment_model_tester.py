@@ -8,30 +8,29 @@ from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, S
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
-from feature_vector import FeatureVector
+from corpus_features_vector import CorpusFeaturesVector
 from utils import get_sorted_highest_k_elements_in_matrix, ProgressBar, print_title
 
 
 class SentimentModelTester:
-    def __init__(self, corpus: Corpus, feature_vector: FeatureVector, model, w: np.ndarray=None):
+    def __init__(self, corpus: Corpus, features_vector: CorpusFeaturesVector, model, w: np.ndarray=None):
         assert model in MODELS
         if DEBUG:
             if not isinstance(corpus, Corpus):
                 raise Exception('The corpus argument is not a Corpus object')
         self.matrix = np.zeros((len(SENTENCE_LABELS), len(SENTENCE_LABELS)))
         self.corpus = corpus
-        self.feature_vector = feature_vector
+        self.features_vector = features_vector
         self.w = w
         self.model = model
 
-    def sentence_score(self, document: Document, sen_index: int, document_label, sentence_label, pre_sentence_label):
+    def sentence_score(self, document: Document, sentence: Sentence,
+                       document_label=None, sentence_label=None, pre_sentence_label=None):
         assert sentence_label in SENTENCE_LABELS
         assert document_label is None or document_label in DOCUMENT_LABELS
         assert pre_sentence_label is None or pre_sentence_label in SENTENCE_LABELS
-        fv = self.feature_vector.evaluate_clique_feature_vector(document, sen_index, self.model,
-                                                                document_label=document_label,
-                                                                sentence_label=sentence_label,
-                                                                pre_sentence_label=pre_sentence_label)
+        fv = self.features_vector.evaluate_clique_feature_vector(
+            document, sentence, document_label, sentence_label, pre_sentence_label)
         return np.sum(np.take(self.w, fv))
 
     # Viterbi is a dynamic-programming algorithm. It finds the top_k sentence labelings yields the highest scores.
@@ -110,7 +109,7 @@ class SentimentModelTester:
                     # first sentence will have positive scores only for rank=0 (for each labeling).
                     pi[sentence_idx, sentence_label_idx, :] = -np.inf
                     pi[sentence_idx, sentence_label_idx, 0] = self.sentence_score(
-                        document, sentence_idx, document_label, sentence_label, pre_sentence_label=None)
+                        document, sentence, document_label, sentence_label)
                     continue
 
                 if sentence is not None:
@@ -118,7 +117,7 @@ class SentimentModelTester:
                     # For each possible label (for the previous sentence), evaluate the score of the current
                     # sentence, when using `sentence_label` as the label for the current sentence.
                     sentence_scores_per_pre_sentence_label = [(pre_sentence_label_idx, self.sentence_score(
-                        document, sentence_idx, document_label, sentence_label, pre_sentence_label))
+                        document, sentence, document_label, sentence_label, pre_sentence_label))
                             for pre_sentence_label_idx, pre_sentence_label in enumerate(SENTENCE_LABELS)]
                 else:
                     # It is the last iteration of the outer loop (for sentence_idx = last_sentence_idx+1).
@@ -154,19 +153,19 @@ class SentimentModelTester:
         for document in corpus.documents:
             for document_label in DOCUMENT_LABELS:
                 sum_document_score = 0
-                for i, sentence in enumerate(document.sentences):
+                for sentence in document.sentences:
                     sum_document_score = sum_document_score + \
-                                         self.sentence_score(document, i, document_label=document_label,
+                                         self.sentence_score(document, sentence, document_label=document_label,
                                                              sentence_label=None, pre_sentence_label=None)
                 if best_document_score is None or sum_document_score > best_document_score:
                     best_document_score = sum_document_score
                     document.label = document_label
 
     def sentence_predict(self, document: Document):
-        for i, sentence in enumerate(document.sentences):
+        for sentence in document.sentences:
             best_sentence_score = None
             for sentence_label in SENTENCE_LABELS:
-                temp_sentence_score = self.sentence_score(document, i,
+                temp_sentence_score = self.sentence_score(document, sentence,
                                                           document_label=None,
                                                           sentence_label=sentence_label,
                                                           pre_sentence_label=None)

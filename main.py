@@ -1,10 +1,13 @@
 from corpus import Corpus
-from feature_vector import FeatureVector
+from corpus_features_vector import CorpusFeaturesVector
 from sentiment_model_trainer import SentimentModelTrainer
 from sentiment_model_tester import SentimentModelTester
 from config import Config
 from collections import namedtuple
 from utils import print_title
+
+import os
+import pickle
 
 
 def data_exploration(train_set, test_set, comp_set):
@@ -43,11 +46,12 @@ def data_exploration(train_set, test_set, comp_set):
 Dataset = namedtuple("Dataset", ["train", "test"])
 
 
-def load_dataset(config: Config):
-    train_set = Corpus()
-    train_set.load_file(config.pos_docs_train_filename, documents_label=1, insert_sentence_labels=True)
-    train_set.load_file(config.neg_docs_train_filename, documents_label=-1, insert_sentence_labels=True)
-    test_set = Corpus()
+def load_dataset(config: Config, train_set: Corpus=None):
+    if train_set is None:
+        train_set = Corpus('train')
+        train_set.load_file(config.pos_docs_train_filename, documents_label=1, insert_sentence_labels=True)
+        train_set.load_file(config.neg_docs_train_filename, documents_label=-1, insert_sentence_labels=True)
+    test_set = Corpus('test')
     test_set.load_file(config.pos_docs_test_filename, documents_label=1, insert_sentence_labels=True)
     test_set.load_file(config.neg_docs_test_filename, documents_label=-1, insert_sentence_labels=True)
     return Dataset(train=train_set, test=test_set)
@@ -55,16 +59,30 @@ def load_dataset(config: Config):
 
 def main():
     config = Config()
-    dataset = load_dataset(config)
-    feature_vector = FeatureVector(dataset.train)
-    trainer = SentimentModelTrainer(dataset.train.clone(), feature_vector, model=config.model_type)
+
+    if False and os.path.isfile(config.train_corpus_feature_vector_filename):
+        with open(config.train_corpus_feature_vector_filename, 'rb') as f:
+            features_vector = pickle.load(f)
+        # dataset = load_dataset(config, features_vector.corpus)
+        dataset = load_dataset(config)
+    else:
+        dataset = load_dataset(config)
+        # feature_vector = FeatureVector(dataset.train)
+        features_vector = CorpusFeaturesVector(config)
+        features_vector.initialize_features(dataset.train)
+        with open(config.train_corpus_feature_vector_filename, 'wb') as f:
+            pickle.dump(features_vector, f)
+
+    features_vector.initialize_corpus_features(dataset.train)
+    features_vector.initialize_corpus_features(dataset.test)
+    trainer = SentimentModelTrainer(dataset.train.clone(), features_vector, config)
     trainer.generate_features()
 
     print('Model name: ' + config.model_name)
 
     if config.perform_train:
-        from random import shuffle
-        shuffle(trainer.corpus.documents)
+        # from random import shuffle
+        # shuffle(trainer.corpus.documents)
 
         trainer.evaluate_feature_vectors()
         trainer.mira_algorithm(iterations=config.mira_iterations,
@@ -81,9 +99,9 @@ def main():
     for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
         print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
         if config.perform_train:
-            tester = SentimentModelTester(evaluation_dataset.clone(), feature_vector, config.model_type, w=trainer.w)
+            tester = SentimentModelTester(evaluation_dataset.clone(), features_vector, config.model_type, w=trainer.w)
         else:
-            tester = SentimentModelTester(evaluation_dataset.clone(), feature_vector, config.model_type)
+            tester = SentimentModelTester(evaluation_dataset.clone(), features_vector, config.model_type)
             tester.load_model(config.model_weights_filename)
 
         tester.inference()

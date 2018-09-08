@@ -17,20 +17,20 @@ from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, S
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
-from feature_vector import FeatureVector
+from corpus_features_vector import CorpusFeaturesVector
 from sentiment_model_tester import SentimentModelTester
-from utils import ProgressBar, print_title
+from utils import ProgressBar, print_title, shuffle_iter
 from config import Config
 
 
 class SentimentModelTrainer:
-    def __init__(self, corpus: Corpus, feature_vector: FeatureVector, config: Config):
-        assert config.verify()
+    def __init__(self, corpus: Corpus, features_vector: CorpusFeaturesVector, config: Config):
+        config.verify()
         if DEBUG:
             if not isinstance(corpus, Corpus):
                 raise Exception('The corpus argument is not a Corpus object')
         self.corpus = corpus
-        self.feature_vector = feature_vector
+        self.features_vector = features_vector
         self.empirical_counts = None
         self.evaluated_feature_vectors = []
         self.w = None
@@ -38,16 +38,16 @@ class SentimentModelTrainer:
 
     def generate_features(self):
         start_time = time.time()
-        self.feature_vector.initialize_features(self.config.model_type)
-        self.w = np.zeros(self.feature_vector.count_features())
+        # self.features_vector.initialize_features()
+        self.w = np.zeros(self.features_vector.size)
         print("generate_feature done: {0:.3f} seconds".format(time.time() - start_time))
-        print("Features count: {}".format(self.feature_vector.count_features()))
+        print("Features count: {}".format(self.features_vector.size))
 
     def evaluate_feature_vectors(self):
         start_time = time.time()
         print("Evaluating features")
         pb = ProgressBar(len(self.corpus.documents))
-        for doc_index, document in enumerate(self.corpus.documents, start=1):
+        for document in self.corpus.documents:
             pb.start_next_task()
             self.evaluated_feature_vectors.append(self.evaluate_document_feature_vector(document))
         pb.finish()
@@ -57,16 +57,17 @@ class SentimentModelTrainer:
         # TODO if not structured - should not count from 1
         y_document = y_tag[0] if y_tag is not None else None
         row_ind, col_ind = [], []
-        for sentence_index, sentence in enumerate(islice(document.sentences, 1, None), start=1):  # TODO
-            y_sentence = y_tag[sentence_index + 1] if y_tag is not None else None
-            y_pre_sentence = y_tag[sentence_index] if y_tag is not None else None
-            feature_indices = self.feature_vector.evaluate_clique_feature_vector(
-                document, sentence_index, self.config.model_type, y_document, y_sentence, y_pre_sentence)
-            col_ind += feature_indices
-            row_ind += [sentence_index - 1 for _ in feature_indices]
-
+        for sentence in islice(document.sentences, 1, None):  # TODO
+            y_sentence = y_tag[sentence.index + 1] if y_tag is not None else None
+            y_pre_sentence = y_tag[sentence.index] if y_tag is not None else None
+            feature_indices = self.features_vector.evaluate_clique_feature_vector(
+                document, sentence, y_document, y_sentence, y_pre_sentence)
+            col_ind += list(feature_indices)  # TODO: consider stacking it all in array (size can be known)
+            row_ind += [sentence.index - 1 for _ in feature_indices]
+            #print(len(feature_indices))
+        #print(len(col_ind))
         return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)),
-                          shape=(document.count_sentences() - 1, self.feature_vector.count_features()))  # TODO
+                          shape=(document.count_sentences() - 1, self.features_vector.size))  # TODO
 
     def mira_algorithm(self, iterations=5, k_best_viterbi_labelings=2, k_random_labelings=0):
         optimization_time = time.time()
@@ -76,11 +77,14 @@ class SentimentModelTrainer:
             k_rnd=k_random_labelings,
             iter=iterations))
         pb = ProgressBar(iterations * len(self.corpus.documents))
-        tester = SentimentModelTester(self.corpus.clone(), self.feature_vector, self.config.model_type)
+        tester = SentimentModelTester(self.corpus.clone(), self.features_vector, self.config.model_type)
         for cur_iter in range(1, iterations+1):
-            for doc_idx, (document, test_document, feature_vectors) in enumerate(zip(self.corpus.documents, tester.corpus.documents, self.evaluated_feature_vectors)):
+            for document_nr, (document, test_document, feature_vectors) \
+                in enumerate(shuffle_iter(self.corpus.documents,
+                                          tester.corpus.documents,
+                                          self.evaluated_feature_vectors), start=1):
                 task_str = 'iter: {cur_iter}/{nr_iters} -- document: {cur_doc}/{nr_docs}'.format(
-                    cur_iter=cur_iter, nr_iters=iterations, cur_doc=doc_idx+1, nr_docs=len(self.corpus.documents)
+                    cur_iter=cur_iter, nr_iters=iterations, cur_doc=document_nr+1, nr_docs=len(self.corpus.documents)
                 )
                 pb.start_next_task(task_str)
 
@@ -105,8 +109,8 @@ class SentimentModelTrainer:
         pb.finish()
         print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
 
-    def extract_qp_matrices(self, document, feature_vectors, y, c):
-        M = sparse.eye(self.feature_vector.count_features())
+    def extract_qp_matrices(self, document: Document, feature_vectors, y, c):
+        M = sparse.eye(self.features_vector.size)
         q = np.copy(self.w) * -1
         y_fv = feature_vectors.sum(axis=0)
         y_fv = np.asarray(y_fv).reshape((y_fv.shape[1],))
@@ -136,7 +140,7 @@ class SentimentModelTrainer:
             h.append(-y_tag_loss)
         G = csr_matrix(G)
         h = np.array(h).reshape(len(c), )
-        return M, q.reshape((self.feature_vector.count_features()), ), G, h
+        return M, q.reshape(self.features_vector.size, ), G, h
 
     @staticmethod
     def extract_random_labeling_subset(document: Document, k: int, use_document_tag: bool=False):
