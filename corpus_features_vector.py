@@ -37,9 +37,9 @@ class SentenceFeatureAttributes(Singleton):
     #     "f_9_trigram_pre_none", "f_10_trigram_pre_none", "f_11_trigram_pre_pre_none_pre_none",
     #     "f_12_trigram_pre_pre_none_none", "f_13_trigram_pre_none_none", "f_14_trigram_none_none_none"]
 
-    feature_attribute_types = [
-        "f_1_word_tag", "f_2_tag", "f_3_bigram", "f_4_bigram_none", "f_5_bigram_none",
-        "f_6_bigram_none_none", "f_7_trigram"]
+    feature_attribute_types = {1: "f_1_word_tag", 3: "f_3_bigram"}
+
+    feature_attribute_types_name2idx_mapping = {name: idx for idx, name in feature_attribute_types.items()}
 
     def pre_tags(self, sentence, index):
         pre_pre_tag = sentence[index - 2].tag if index >= 2 else "*"
@@ -121,10 +121,9 @@ class SentenceFeatureAttributes(Singleton):
 
     def iterate_over_sentence_attributes(self, sentence: Sentence):
         for token_idx in range(len(sentence.tokens)):
-            for feature_attribute_type_idx, feature_attribute_type in enumerate(self.feature_attribute_types, start=1):
-                value = getattr(self, feature_attribute_type)(sentence.tokens, token_idx)
-                attribute = (feature_attribute_type_idx, value)
-                yield attribute
+            for fa_type_idx, fa_type_name in self.feature_attribute_types.items():
+                fa_value = getattr(self, fa_type_name)(sentence.tokens, token_idx)
+                yield fa_type_idx, fa_value
 
 
 # TODO: doc!
@@ -237,13 +236,11 @@ class CorpusFeaturesVector:
         self.corpus = corpus
         self.config = config
         self.fa_to_fa_idx_mapping = {}  # A mapping from feature attribute to its index
-        # self.sentence_fa_idxs = {}  # mapping from (doc_idx, sen_idx) to 1D numpy array of its fa indeces.
         self.nr_feature_attrs = 0
         self.nr_feature_groups = 0
         self.fa_in_fg_mask = None
-        self.fg_to_fg_idx_mapping = {}
+        self.fg_to_fg_idx_mapping = {}  # A mapping from feature group to its index
         self.nr_features = 0
-        # self.sentence_features = None
         self.feature_groups_types = []
         self.features_idxs = None
 
@@ -257,11 +254,11 @@ class CorpusFeaturesVector:
         document_label, sentence_label, pre_sentence_label = sanitize_labels(
             document, sentence, document_label, sentence_label, pre_sentence_label)
         for feature_group_type_idx, feature_group_type in enumerate(self.feature_groups_types):
-            fg_value = feature_group_type.get_value_for_sentence(document, sentence, document_label, sentence_label, pre_sentence_label)
+            fg_value = feature_group_type.get_value_for_sentence(
+                document, sentence, document_label, sentence_label, pre_sentence_label)
             if fg_value is None:
                 continue
-            fg_value = (feature_group_type_idx, fg_value)
-            yield self.fg_to_fg_idx_mapping[fg_value]
+            yield self.fg_to_fg_idx_mapping[feature_group_type_idx][fg_value]
 
     def initialize_features(self):
         self._initialize_feature_groups()
@@ -278,10 +275,11 @@ class CorpusFeaturesVector:
         next_fg_idx = 0
         self.fg_to_fg_idx_mapping = {}
         for feature_group_type_idx, feature_group_type in enumerate(self.feature_groups_types):
+            self.fg_to_fg_idx_mapping[feature_group_type_idx] = {}
             for fg_value in feature_group_type.iterate_over_possible_values():
-                self.fg_to_fg_idx_mapping[(feature_group_type_idx, fg_value)] = next_fg_idx
+                self.fg_to_fg_idx_mapping[feature_group_type_idx][fg_value] = next_fg_idx
                 next_fg_idx += 1
-        self.nr_feature_groups = len(self.fg_to_fg_idx_mapping)
+        self.nr_feature_groups = next_fg_idx
 
     def _initialize_feature_attributes(self):
         # Here we go over the corpus and assign a unique index for each feature attribute in the corpus.
@@ -289,38 +287,67 @@ class CorpusFeaturesVector:
         #   that sentence, sorted by the idx.
         print("Initializing feature attributes")
         pb = ProgressBar(len(self.corpus.documents))
-        self.fa_to_fa_idx_mapping = {}  # A mapping from feature attribute to its index
+        # A mapping from feature attribute to its index
+        self.fa_to_fa_idx_mapping = {fa_type_idx: dict()
+                                     for fa_type_idx in SentenceFeatureAttributes().feature_attribute_types}
         next_feature_attribute_index = 0
         for document, sentence in self.corpus:
             if sentence.index == 0:
                 pb.start_next_task()
-            sentence_attrs_indeces = set()
-            for attr in SentenceFeatureAttributes().iterate_over_sentence_attributes(sentence):
-                if attr not in self.fa_to_fa_idx_mapping:
-                    self.fa_to_fa_idx_mapping[attr] = next_feature_attribute_index
+            sentence_fa_idxs = set()
+            for fa_type_idx, fa_value in SentenceFeatureAttributes().iterate_over_sentence_attributes(sentence):
+                if fa_value not in self.fa_to_fa_idx_mapping[fa_type_idx]:
+                    self.fa_to_fa_idx_mapping[fa_type_idx][fa_value] = next_feature_attribute_index
                     next_feature_attribute_index += 1
-                sentence_attrs_indeces.add(self.fa_to_fa_idx_mapping[attr])
-            sentence_attrs_indeces = np.array(list(sentence_attrs_indeces), dtype=int)
-            sentence_attrs_indeces.sort()
-            sentence.feature_attributes_idxs = sentence_attrs_indeces
+                    sentence_fa_idxs.add(self.fa_to_fa_idx_mapping[fa_type_idx][fa_value])
+            sentence_fa_idxs = np.array(list(sentence_fa_idxs), dtype=int)
+            sentence_fa_idxs.sort()
+            sentence.feature_attributes_idxs = sentence_fa_idxs
         pb.finish()
 
-        assert(next_feature_attribute_index == len(self.fa_to_fa_idx_mapping))
         self.nr_feature_attrs = next_feature_attribute_index
 
     def _initialize_features_idxs(self):
+        p = np.zeros((self.nr_feature_groups, self.nr_feature_attrs))
         self.fa_in_fg_mask = np.zeros((self.nr_feature_groups, self.nr_feature_attrs), dtype=bool)
         for document, sentence in self.corpus:
             for fg_idx in self.iterate_over_feature_groups_indeces_of_sentence(document, sentence):
                 fa_idxs = sentence.feature_attributes_idxs
                 self.fa_in_fg_mask[fg_idx, fa_idxs] = True
+                p[fg_idx, fa_idxs] += 1
+
+        self.nr_all_features = self.fa_in_fg_mask.sum()
 
         # DILUL
         # TODO: DOC!
-        rnd = np.random.rand(*self.fa_in_fg_mask.shape) < self.config.features_dilution_ratio
-        self.fa_in_fg_mask &= rnd
+        # rnd = np.random.rand(*self.fa_in_fg_mask.shape) < self.config.features_dilution_ratio
+        # self.fa_in_fg_mask &= rnd
+        if False and self.nr_all_features > self.config.nr_features:
+            diluted_fa_in_fg_mask = np.zeros(self.fa_in_fg_mask.shape, dtype=bool)
+
+            p = p[self.fa_in_fg_mask]
+            p /= p.sum()
+            indeces_of_features_to_keep = np.random.choice(
+                self.nr_all_features, self.config.nr_features, replace=False, p=p)
+            features_to_keep_flattened_mask = np.zeros((self.nr_all_features, ), dtype=bool)
+            features_to_keep_flattened_mask[indeces_of_features_to_keep] = True
+            diluted_fa_in_fg_mask[self.fa_in_fg_mask] = features_to_keep_flattened_mask
+
+            # turn on important features
+            feature_attributes_idxs_to_always_leave_on = set()
+            FEATURE_ATTRIBUTES_TYPES_IDXS_TO_ALWAYS_LEAVE_ON = {1, 3}
+            for fa_type_idx in FEATURE_ATTRIBUTES_TYPES_IDXS_TO_ALWAYS_LEAVE_ON:
+                for _, fa_idx in self.fa_to_fa_idx_mapping[fa_type_idx].items():
+                    feature_attributes_idxs_to_always_leave_on.add(fa_idx)
+            feature_attributes_idxs_to_always_leave_on = np.array(list(feature_attributes_idxs_to_always_leave_on))
+            first_feature_mask = np.zeros(self.fa_in_fg_mask.shape, dtype=bool)
+            first_feature_mask[:, feature_attributes_idxs_to_always_leave_on] = True
+            diluted_fa_in_fg_mask[self.fa_in_fg_mask & first_feature_mask] = True
+
+            self.fa_in_fg_mask = diluted_fa_in_fg_mask
 
         self.nr_features = self.fa_in_fg_mask.sum()
+        # assert(self.nr_features >= self.config.nr_features)
 
         self.features_idxs = np.zeros(self.fa_in_fg_mask.shape, dtype=int)
         self.features_idxs[self.fa_in_fg_mask] = np.arange(0, self.nr_features)
@@ -333,11 +360,15 @@ class CorpusFeaturesVector:
             if sentence.index == 0:
                 pb.start_next_task()
             sentence.features = dict()
+            fa_idxs = sentence.feature_attributes_idxs
             for fg_idx in range(self.nr_feature_groups):
-                fa_idxs = sentence.feature_attributes_idxs
                 fa_mask = self.fa_in_fg_mask[fg_idx, fa_idxs]
                 features = self.features_idxs[fg_idx, fa_idxs[fa_mask]]
                 sentence.features[fg_idx] = features
+
+                # mrk = '<--' if fa_idxs.shape[0] == features.shape[0] else ''
+                # print(fg_idx, fa_idxs.shape, fa_mask.shape, features.shape, mrk)
+            # print()
         pb.finish()
 
     def initialize_corpus_features(self, corpus: Corpus):
@@ -346,12 +377,28 @@ class CorpusFeaturesVector:
         for document, sentence in corpus:
             if sentence.index == 0:
                 pb.start_next_task()
+
+            # sentence_fa_idxs = set()
+            # for fa_type_idx, fa_value in SentenceFeatureAttributes().iterate_over_sentence_attributes(sentence):
+            #     if fa_value not in self.fa_to_fa_idx_mapping[fa_type_idx]:
+            #         continue
+            #
+            #     fa_idx = None
+            #     nr_occurances = len(self.fa_to_fa_idx_mapping[fa_type_idx][fa_value])
+            #     for occurance in range(nr_occurances):
+            #         fa_idx = self.fa_to_fa_idx_mapping[fa_type_idx][fa_value][occurance]
+            #         if fa_idx not in sentence_fa_idxs:
+            #             break
+            #     assert fa_idx is not None
+            #
+            #     sentence_fa_idxs.add(fa_idx)
+
             sentence_fa_idxs = {
-                self.fa_to_fa_idx_mapping.get(attr)
-                for attr in SentenceFeatureAttributes().iterate_over_sentence_attributes(sentence)
+                self.fa_to_fa_idx_mapping[fa_type_idx][fa_value]
+                for fa_type_idx, fa_value in SentenceFeatureAttributes().iterate_over_sentence_attributes(sentence)
+                if fa_value in self.fa_to_fa_idx_mapping[fa_type_idx]
             }
-            if None in sentence_fa_idxs:
-                sentence_fa_idxs.remove(None)
+
             sentence_fa_idxs = np.array(list(sentence_fa_idxs), dtype=int)
             sentence_fa_idxs.sort()
             sentence.feature_attributes_idxs = sentence_fa_idxs
