@@ -1,5 +1,5 @@
 from constants import *
-from utils import hash_file
+from utils import hash_file, multi_dicts_product_iterator
 
 
 class ConfigurationOptionPrinter:
@@ -62,7 +62,7 @@ class Config:
     evaluate_over_test_set = True
 
     mira_k_random_labelings = 0
-    mira_k_best_viterbi_labelings = 7
+    mira_k_best_viterbi_labelings = 15
     mira_iterations = 5
     mira_batch_size = 8
 
@@ -157,3 +157,39 @@ class Config:
 
     def verify(self):
         assert(self.model_type in MODELS)
+
+    def clone(self):
+        new_config = Config()
+        for param_name, _, default in self.get_all_settable_params():
+            setattr(new_config, param_name, getattr(self, param_name, default=default))
+        return new_config
+
+    @classmethod
+    def get_all_params(cls):
+        cnf = cls()
+        return [(attr, type(getattr(cnf, attr)), getattr(cnf, attr)) for attr in dir(cnf)
+                if not callable(getattr(cnf, attr)) and not attr.startswith("__")]
+
+    @classmethod
+    def get_all_settable_params(cls):
+        return [(param_name, _type, default)
+                for param_name, _type, default in cls.get_all_params()
+                if _type in {str, int, float, bool}]
+
+    def iterate_over_configurations(self, *args, **kwargs):
+        """
+            Input example:
+            iterate_over_configurations(
+                [ {'mira_k_random_labelings': 0, 'mira_k_best_viterbi_labelings': 10},
+                  {'mira_k_random_labelings': 10, 'mira_k_best_viterbi_labelings': 0} ],
+                [ {'model_type': [SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED], 'loss_type': 'plus'},
+                  {'model_type': [DOCUMENT_CLASSIFIER, STRUCTURED_JOINT], 'loss_type': ['plus', 'mult']} ],
+                mira_iterations = [3, 4, 5, 6],
+                min_nr_feature_occurrences = [2, 3, 4]
+            )
+        """
+        for values_dict in multi_dicts_product_iterator(*args, **kwargs):
+            config = self.clone()
+            for key, value in values_dict.items():
+                setattr(config, key, value)
+            yield config
