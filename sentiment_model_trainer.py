@@ -64,8 +64,6 @@ class SentimentModelTrainer:
                 document, sentence, y_document, y_sentence, y_pre_sentence)
             col_ind += list(feature_indices)  # TODO: consider stacking it all in array (size can be known)
             row_ind += [sentence.index - 1 for _ in feature_indices]
-            #print(len(feature_indices))
-        #print(len(col_ind))
         return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)),
                           shape=(document.count_sentences() - 1, self.features_vector.size))  # TODO
 
@@ -90,19 +88,21 @@ class SentimentModelTrainer:
                 )
                 pb.start_next_task(task_str)
 
+                # Generate labelings for each document.
                 mira_labelings_batch = []
                 for document, test_document in zip(documents_batch, test_documents_batch):
-                    labelings = []
+                    document_generated_labelings = []
                     if k_random_labelings > 0:
-                        labelings = self.extract_random_labeling_subset(document, k_random_labelings, use_document_tag=False)
+                        document_generated_labelings = self.extract_random_labeling_subset(
+                            document, k_random_labelings, use_document_tag=False)
                     if k_best_viterbi_labelings > 0:
                         tester.w = self.w
                         top_k = min(k_best_viterbi_labelings, NR_SENTENCE_LABELS ** document.count_sentences())
-                        labelings = tester.viterbi_inference(test_document, top_k=top_k)
-                        labelings += labelings
-                        shuffle(labelings)
-                    assert(len(labelings) >= 1)
-                    mira_labelings_batch.append(labelings)
+                        viterbi_labelings = tester.viterbi_inference(test_document, top_k=top_k)
+                        document_generated_labelings += viterbi_labelings
+                        shuffle(document_generated_labelings)
+                    assert(len(document_generated_labelings) >= 1)
+                    mira_labelings_batch.append(document_generated_labelings)
 
                 P, q, G, h = self.extract_qp_matrices(documents_batch, feature_vectors_batch, mira_labelings_batch)
                 w = solve_qp(P, q, G, h, solver="osqp")
