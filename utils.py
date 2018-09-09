@@ -138,6 +138,52 @@ def shuffle_iterate_over_batches(*arrays, batch_size: int = None, shuffle: bool 
 
     for batch_start_idx in range(0, nr_elements, batch_size):
         indeces = shuffled_indeces[batch_start_idx: min(nr_elements, batch_start_idx + batch_size)]
-        batch = (array[indeces] if isinstance(array, np.ndarray) else list(array[idx] for idx in indeces) for array in
-                 arrays)
+        batch = (array[indeces] if isinstance(array, np.ndarray) else list(array[idx] for idx in indeces)
+                 for array in arrays)
         yield (batch_start_idx,) + tuple(batch)
+
+
+def dict_product_iterator(dct: dict):
+    """
+        Input example:
+        dict_product_iterator(
+            {'mira_k_random_labelings': 0,
+             'mira_k_best_viterbi_labelings': [10, 13],
+             'model_type': ['DOCUMENT_CLASSIFIER', 'STRUCTURED_JOINT']
+            }
+        }
+    """
+    from itertools import product
+
+    dct_items_with_single_value = {key: value for key, value in dct.items() if not isinstance(value, list)}
+    dct_items_with_multiple_values__ordered = [(key, lst) for key, lst in dct.items() if isinstance(lst, list)]
+    dct_items_with_multiple_values__ordered__only_lst = [lst for _, lst in dct_items_with_multiple_values__ordered]
+    for values_sequence in product(*dct_items_with_multiple_values__ordered__only_lst):
+        s = {key: value for value, (key, _) in zip(values_sequence, dct_items_with_multiple_values__ordered)}
+        yield {**s, **dct_items_with_single_value}
+
+
+def multi_dicts_product_iterator(*args, **kwargs):
+    """
+        Input example:
+        multi_dicts_product_iterator(
+            [ {'mira_k_random_labelings': 0, 'mira_k_best_viterbi_labelings': 10},
+              {'mira_k_random_labelings': 10, 'mira_k_best_viterbi_labelings': 0} ],
+            [ {'model_type': ['SENTENCE_CLASSIFIER', 'SENTENCE_STRUCTURED'], 'loss_type': 'plus'},
+              {'model_type': ['DOCUMENT_CLASSIFIER', 'STRUCTURED_JOINT'], 'loss_type': ['plus', 'mult']} ],
+            mira_iterations = [3, 5],
+            min_nr_feature_occurrences = [2, 3, 4]
+        )
+    """
+    from itertools import product
+
+    list_of_lists_of_dicts = list(args)
+    list_of_lists_of_dicts.append([dict(kwargs)])
+    for dicts_sequence in product(*list_of_lists_of_dicts):
+        # Each dictionary in `dicts_sequence` is expanded into a list of possible dictionaries.
+        expanded_dicts = [list(dict_product_iterator(dct)) for dct in dicts_sequence]
+        for dicts in product(*expanded_dicts):
+            current_yielded_dict = dict()
+            for dct in dicts:
+                current_yielded_dict.update(dct)
+            yield current_yielded_dict
