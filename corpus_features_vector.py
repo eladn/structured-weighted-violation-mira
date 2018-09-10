@@ -45,7 +45,7 @@ class SentenceFeatureAttributes(Singleton):
     #     12: "f_12_trigram_pre_pre_none_none", 13: "f_13_trigram_pre_none_none", 14: "f_14_trigram_none_none_none"}
 
     # It turns out that these features benefit the most to the accuracy.
-    feature_attribute_types = {1: "f_1_word_tag", 3: "f_3_bigram", 9: "f_9_trigram_pre_none"}
+    feature_attribute_types = {1: "f_1_word_tag", 3: "f_3_bigram"}
 
     feature_attribute_types_name2idx_mapping = {name: idx for idx, name in feature_attribute_types.items()}
 
@@ -271,7 +271,7 @@ class CorpusFeaturesVector:
                 continue
             yield self.fg_to_fg_idx_mapping[feature_group_type_idx][fg_value]
 
-    def initialize_features(self, corpus: Corpus):
+    def generate_features_from_corpus(self, corpus: Corpus):
         self._initialize_feature_groups()
         self._initialize_sentences_feature_attributes_for_corpus(corpus, generate_new_fa_if_not_exists=True)
         self._initialize_features_mask(corpus)
@@ -280,6 +280,7 @@ class CorpusFeaturesVector:
         self._initialize_sentences_features_for_corpus(corpus)
 
     def _initialize_feature_groups(self):
+        # TODO: doc!
         self.feature_groups_types = [
             feature_group
             for feature_group in self.all_feature_groups_types
@@ -295,6 +296,7 @@ class CorpusFeaturesVector:
         self.nr_feature_groups = next_fg_idx
 
     def _initialize_features_mask(self, corpus: Corpus):
+        # TODO: doc!
         self.fa_in_fg_count = np.zeros((self.nr_feature_groups, self.nr_feature_attrs))
         self.fa_in_fg_mask = np.zeros((self.nr_feature_groups, self.nr_feature_attrs), dtype=bool)
         for document, sentence in corpus:
@@ -348,12 +350,13 @@ class CorpusFeaturesVector:
         self.nr_features = self.fa_in_fg_mask.sum()
 
     def _initialize_features_idxs(self):
+        # TODO: doc!
         self.features_idxs = np.zeros(self.fa_in_fg_mask.shape, dtype=int)
         self.features_idxs[self.fa_in_fg_mask] = np.arange(0, self.nr_features)
 
     def _initialize_sentences_features_for_corpus(self, corpus: Corpus=None):
         # TODO: doc!
-        print("Initializing sentences features for corpus `{corpus_name}`".format(corpus_name=corpus.name))
+        print("Initializing sentences features for corpus `{corpus_name}`.".format(corpus_name=corpus.name))
         pb = ProgressBar(len(corpus.documents))
         for document, sentence in corpus:
             if sentence.index == 0:
@@ -367,10 +370,17 @@ class CorpusFeaturesVector:
         pb.finish()
 
     def _initialize_sentences_feature_attributes_for_corpus(self, corpus: Corpus, generate_new_fa_if_not_exists=False):
-        # Here we go over the corpus and assign a unique index for each feature attribute in the corpus.
-        # We also store for each sentence a numpy 1D array of the indeces of the feature attributes in
-        #   that sentence, sorted by the idx.
-        print("Initializing feature attributes for corpus `{corpus_name}`".format(corpus_name=corpus.name))
+        """
+            Goes over the corpus and assign a unique index for each feature attribute in the corpus.
+            Store for each sentence a numpy 1D array of the indeces of the feature attributes in
+              that sentence, sorted by the idx.
+        """
+        title = "Initializing feature attributes for corpus `{corpus_name}`.".format(corpus_name=corpus.name)
+        if generate_new_fa_if_not_exists:
+            title += " Generate new feature-attributes when needed (and add them to the feature vector)."
+        else:
+            title += " Use only feature-attributes already in the feature vector (do not create new)."
+        print(title)
         pb = ProgressBar(len(corpus.documents))
         next_feature_attribute_index_to_generate = self.nr_feature_attrs
         for document, sentence in corpus:
@@ -386,12 +396,7 @@ class CorpusFeaturesVector:
 
                 fa_idx = None
                 nr_fa_occurrences = len(self.fa_to_fa_idx_mapping[fa_type_idx][fa_value])
-                # if generate_new_fa_if_not_exists:
-                #     nr_fa_occurrences = max(nr_fa_occurrences, self.MAX_NR_FEATURE_ATTRIBUTE_OCCURRENCES)
                 for current_fa_occurrence in range(nr_fa_occurrences):
-                    # if generate_new_fa_if_not_exists and len(self.fa_to_fa_idx_mapping[fa_type_idx][fa_value]) == current_fa_occurrence:
-                    #     self.fa_to_fa_idx_mapping[fa_type_idx][fa_value].append(next_feature_attribute_index_to_generate)
-                    #     next_feature_attribute_index_to_generate += 1
                     fa_idx = self.fa_to_fa_idx_mapping[fa_type_idx][fa_value][current_fa_occurrence]
                     if fa_idx not in sentence_fa_idxs:
                         break
@@ -407,12 +412,6 @@ class CorpusFeaturesVector:
 
                 sentence_fa_idxs.add(fa_idx)
 
-            # sentence_fa_idxs = {
-            #     self.fa_to_fa_idx_mapping[fa_type_idx][fa_value]
-            #     for fa_type_idx, fa_value in SentenceFeatureAttributes().iterate_over_sentence_attributes(sentence)
-            #     if fa_value in self.fa_to_fa_idx_mapping[fa_type_idx]
-            # }
-
             sentence_fa_idxs = np.array(list(sentence_fa_idxs), dtype=int)
             sentence_fa_idxs.sort()
             sentence.feature_attributes_idxs = sentence_fa_idxs
@@ -421,7 +420,7 @@ class CorpusFeaturesVector:
             self.nr_feature_attrs += next_feature_attribute_index_to_generate
 
     def initialize_corpus_features(self, corpus: Corpus):
-        self._initialize_sentences_feature_attributes_for_corpus(corpus)
+        self._initialize_sentences_feature_attributes_for_corpus(corpus, generate_new_fa_if_not_exists=False)
         self._initialize_sentences_features_for_corpus(corpus)
 
     def evaluate_clique_feature_vector(self, document: Document, sentence: Sentence,
