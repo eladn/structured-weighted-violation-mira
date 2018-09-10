@@ -4,7 +4,8 @@ import time
 from itertools import chain
 
 from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
-    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, NR_SENTENCE_LABELS, MODELS, TEST_PATH
+    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, NR_SENTENCE_LABELS, \
+    NR_DOCUMENT_LABELS, MODELS, TEST_PATH
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
@@ -45,6 +46,7 @@ class SentimentModelTester:
         bp, pi = None, None
         viterbi_results_per_document_label = {document_label: {'bp': None, 'pi': None}
                                               for document_label in DOCUMENT_LABELS}
+        bp_for_multi_document_labels = {}
         if infer_document_label:
             for document_label in DOCUMENT_LABELS:
                 cur_bp, cur_pi = self.viterbi_forward_pass(document, document_label=document_label, top_k=top_k)
@@ -62,7 +64,19 @@ class SentimentModelTester:
             # For each one of these final best-k labelings, the back-pointer (for that merge step)
             #   stores the document label of that labeling. It indicates in which result continue
             #   to track back in order to find the rest of that labeling (out of the 2 results).
-            pass
+
+            # Create a matrix of size (NR_DOCUMENT_LABELS * top_k), such that the cell M[document_lbl_idx, rank_idx]
+            # contains the total score of the (rank_idx+1)-th best result from the viterbi execution with document_lbl_idx.
+            total_scores_per_document_label_and_rank = np.zeros((NR_DOCUMENT_LABELS, top_k))
+            for document_label_idx, document_label in enumerate(DOCUMENT_LABELS):
+                total_scores_per_document_label_and_rank[document_label_idx, :] = \
+                    viterbi_results_per_document_label[document_label]['pi'][-1, 0, :]
+
+            # Find indeces (and values) of top_k elements with highest score in the above created matrix.
+            # Notice: Out of (NR_DOCUMENT_LABELS * top_k) elements we find and sort the best top_k elements
+            #   using time complexity (NR_DOCUMENT_LABELS * top_k) + (top_k * log(top_k)), which is optimal.
+            bp_for_multi_document_labels['document_label_idxs'], bp_for_multi_document_labels['rank_idxs'], _ = \
+                get_sorted_highest_k_elements_in_matrix(total_scores_per_document_label_and_rank, top_k)
 
         else:
             # Here we do not have to infer the document label.
@@ -77,8 +91,16 @@ class SentimentModelTester:
 
         # For each rank, trace back (using the back-pointers) the labeling that yields the k-th highest score.
         for rank in range(top_k):
-            sentence_rank = rank
+
             following_sentence_label_idx = 0
+            if infer_document_label:
+                sentence_rank = bp_for_multi_document_labels['rank_idxs'][rank]
+                document_label = DOCUMENT_LABELS[bp_for_multi_document_labels['document_label_idxs'][rank]]
+                labelings[rank][0] = document_label
+                bp = viterbi_results_per_document_label[document_label]['bp']
+            else:
+                sentence_rank = rank
+
             for sentence_idx in range(nr_sentences - 1, -1, -1):
                 # We use the back-pointers of following sentence #(sentence_idx+1) for tracing back the label&rank of
                 # the sentence #sentence_idx.
