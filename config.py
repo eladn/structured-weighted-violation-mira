@@ -141,11 +141,20 @@ class Config:
         ConfigurationOptionPrinter(attribute='train_data_hash')
     )
 
+    def to_string(self, separator='__'):
+        if not hasattr(self, '__model_properties') or not self.__model_properties:
+            self.__model_properties = list(filter(bool, (conf.print(self) for conf in self.model_configurations)))
+            assert(all(isinstance(s, str) for s in self.__model_properties))
+        if separator is None:
+            return list(self.__model_properties)
+        return separator.join(self.__model_properties)
+
     @property
     def model_name(self):
-        if not hasattr(self, '__model_name') or not self.__model_name:
-            self.__model_name = '__'.join(filter(bool, (conf.print(self) for conf in self.model_configurations)))
-        return self.__model_name
+        return self.to_string(separator='__')
+
+    def __str__(self):
+        return self.to_string(', ')
 
     @property
     def model_weights_filename(self):
@@ -161,7 +170,7 @@ class Config:
     def clone(self):
         new_config = Config()
         for param_name, _, default in self.get_all_settable_params():
-            setattr(new_config, param_name, getattr(self, param_name, default=default))
+            setattr(new_config, param_name, getattr(self, param_name, default))
         return new_config
 
     @classmethod
@@ -174,7 +183,7 @@ class Config:
     def get_all_settable_params(cls):
         return [(param_name, _type, default)
                 for param_name, _type, default in cls.get_all_params()
-                if _type in {str, int, float, bool}]
+                if _type in {str, int, float, bool} and not isinstance(getattr(cls, param_name, None), property)]
 
     def iterate_over_configurations(self, *args, **kwargs):
         """
