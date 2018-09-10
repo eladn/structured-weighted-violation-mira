@@ -62,8 +62,8 @@ class SentimentModelConfiguration:
     mira_iterations = 5
     mira_batch_size = 8
 
-    loss_type = 'plus'  # {'mult', 'plus'}
-    doc_loss_factor = 1.2
+    loss_type = 'max'  # {'mult', 'plus', 'max'}
+    doc_loss_factor = 1
 
     min_nr_feature_occurrences = 3
 
@@ -72,8 +72,8 @@ class SentimentModelConfiguration:
 
     # model_type = DOCUMENT_CLASSIFIER
     # model_type = SENTENCE_CLASSIFIER
-    # model_type = STRUCTURED_JOINT
-    model_type = SENTENCE_STRUCTURED
+    model_type = STRUCTURED_JOINT
+    # model_type = SENTENCE_STRUCTURED
 
     @property
     def pos_docs_train_filename(self):

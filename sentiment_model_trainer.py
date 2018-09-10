@@ -130,6 +130,8 @@ class SentimentModelTrainer:
                         y_tag_loss *= y_tag_document_loss
                     elif self.config.loss_type == 'plus':
                         y_tag_loss += self.config.doc_loss_factor * y_tag_document_loss
+                    elif self.config.loss_type == 'max':
+                        y_tag_loss = max(y_tag_loss, y_tag_document_loss)
 
                 h.append(-y_tag_loss)
         G = csr_matrix(G)

@@ -134,7 +134,7 @@ def train_multiple_configurations(NR_PROCESSES: int = 4):
             [{'mira_k_random_labelings': 0, 'mira_k_best_viterbi_labelings': 10},
              {'mira_k_random_labelings': 10, 'mira_k_best_viterbi_labelings': 0}],
             [{'model_type': [SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED], 'loss_type': 'plus'},
-             {'model_type': [DOCUMENT_CLASSIFIER, STRUCTURED_JOINT], 'loss_type': ['plus', 'mult']}],
+             {'model_type': [DOCUMENT_CLASSIFIER, STRUCTURED_JOINT], 'loss_type': ['plus', 'mult', 'max']}],
             mira_iterations=7,
             min_nr_feature_occurrences=[2, 3, 4]
     ):
