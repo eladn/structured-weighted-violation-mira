@@ -8,13 +8,13 @@ from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, S
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
-from corpus_features_vector import CorpusFeaturesExtractor
+from corpus_features_extractor import CorpusFeaturesExtractor
 from utils import get_sorted_highest_k_elements_in_matrix, ProgressBar, print_title
 
 
 class SentimentModelTester:
-    def __init__(self, corpus: Corpus, features_vector: CorpusFeaturesExtractor, model, w: np.ndarray=None):
-        assert model in MODELS
+    def __init__(self, corpus: Corpus, features_vector: CorpusFeaturesExtractor, model_type, w: np.ndarray=None):
+        assert model_type in MODELS
         if DEBUG:
             if not isinstance(corpus, Corpus):
                 raise Exception('The corpus argument is not a Corpus object')
@@ -22,7 +22,7 @@ class SentimentModelTester:
         self.corpus = corpus
         self.features_vector = features_vector
         self.w = w
-        self.model = model
+        self.model_type = model_type
 
     def sentence_score(self, document: Document, sentence: Sentence,
                        document_label=None, sentence_label=None, pre_sentence_label=None):
@@ -194,18 +194,18 @@ class SentimentModelTester:
 
         start_time = time.time()
 
-        if self.model == DOCUMENT_CLASSIFIER:
+        if self.model_type == DOCUMENT_CLASSIFIER:
             self.document_predict(self.corpus)
 
-        elif self.model == SENTENCE_CLASSIFIER:
+        elif self.model_type == SENTENCE_CLASSIFIER:
             for document in self.corpus.documents:
                 self.sentence_predict(document)
 
-        elif self.model in {SENTENCE_STRUCTURED, STRUCTURED_JOINT}:
+        elif self.model_type in {SENTENCE_STRUCTURED, STRUCTURED_JOINT}:
             pb = ProgressBar(len(self.corpus.documents))
             for i, document in enumerate(self.corpus.documents):
                 pb.start_next_task()
-                self.viterbi_inference(document, infer_document_label=(self.model == STRUCTURED_JOINT))
+                self.viterbi_inference(document, infer_document_label=(self.model_type == STRUCTURED_JOINT))
             pb.finish()
 
         print("Inference done: {0:.3f} seconds".format(time.time() - start_time))
@@ -217,7 +217,7 @@ class SentimentModelTester:
     def evaluate_model(self, ground_truth: Corpus):
         assert self.w is not None
 
-        if self.model == SENTENCE_CLASSIFIER:
+        if self.model_type == SENTENCE_CLASSIFIER:
             sentences_results = {
                 "correct": 0,
                 "errors": 0

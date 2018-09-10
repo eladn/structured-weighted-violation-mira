@@ -1,11 +1,11 @@
 from corpus import Corpus
-from corpus_features_vector import CorpusFeaturesExtractor
+from corpus_features_extractor import CorpusFeaturesExtractor
 from sentiment_model_trainer import SentimentModelTrainer
 from sentiment_model_tester import SentimentModelTester
-from config import Config
+from sentiment_model_configuration import SentimentModelConfiguration
 from collections import namedtuple
 from utils import print_title
-from constants import FEATURES_VECTORS_PATH, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, \
+from constants import FEATURES_EXTRACTORS_PATH, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, \
     DOCUMENT_CLASSIFIER, STRUCTURED_JOINT
 
 import os
@@ -49,7 +49,7 @@ def data_exploration(train_set, test_set, comp_set):
 Dataset = namedtuple("Dataset", ["train", "test"])
 
 
-def load_dataset(config: Config):
+def load_dataset(config: SentimentModelConfiguration):
     train_set = Corpus('train')
     train_set.load_file(config.pos_docs_train_filename, documents_label=1, insert_sentence_labels=True)
     train_set.load_file(config.neg_docs_train_filename, documents_label=-1, insert_sentence_labels=True)
@@ -59,24 +59,23 @@ def load_dataset(config: Config):
     return Dataset(train=train_set, test=test_set)
 
 
-def load_feature_vector_and_dataset(config: Config):
-    if os.path.isfile(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename):
-        with open(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename, 'rb') as f:
-            features_vector = pickle.load(f)
+def load_features_extractor_and_dataset(config: SentimentModelConfiguration):
+    if os.path.isfile(FEATURES_EXTRACTORS_PATH + config.train_corpus_features_extractor_filename):
+        with open(FEATURES_EXTRACTORS_PATH + config.train_corpus_features_extractor_filename, 'rb') as f:
+            features_extractor = pickle.load(f)
         dataset = load_dataset(config)
     else:
         dataset = load_dataset(config)
-        # feature_vector = FeatureVector(dataset.train)
-        features_vector = CorpusFeaturesExtractor(config)
-        features_vector.generate_features_from_corpus(dataset.train)
-        with open(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename, 'wb') as f:
-            pickle.dump(features_vector, f)
-    features_vector.initialize_corpus_features(dataset.train)
-    features_vector.initialize_corpus_features(dataset.test)
-    return features_vector, dataset
+        features_extractor = CorpusFeaturesExtractor(config)
+        features_extractor.generate_features_from_corpus(dataset.train)
+        with open(FEATURES_EXTRACTORS_PATH + config.train_corpus_features_extractor_filename, 'wb') as f:
+            pickle.dump(features_extractor, f)
+    features_extractor.initialize_corpus_features(dataset.train)
+    features_extractor.initialize_corpus_features(dataset.test)
+    return features_extractor, dataset
 
 
-# def dummy_job(config: Config, job_number: int):
+# def dummy_job(config: SentimentModelConfiguration, job_number: int):
     # if job_number % 10 == 0:
     #     raise ValueError('asdf')
     # import time
@@ -84,30 +83,29 @@ def load_feature_vector_and_dataset(config: Config):
     # return
 
 
-def perform_training(config: Config, job_number: int=None):
+def perform_training(config: SentimentModelConfiguration, job_number: int=None):
     if job_number is not None:
         fd = os.open("./run_results/training_run_results__" + config.model_name + ".txt", os.O_RDWR | os.O_CREAT)
         os.dup2(fd, 1)
         os.dup2(fd, 2)
 
     print('Model name: ' + config.to_string(', '))
-    features_vector, dataset = load_feature_vector_and_dataset(config)
-    trainer = SentimentModelTrainer(dataset.train.clone(), features_vector, config)
+    features_extractor, dataset = load_features_extractor_and_dataset(config)
+    trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, config)
     trainer.evaluate_feature_vectors()
-    trainer.mira_algorithm(iterations=config.mira_iterations,
-                           k_best_viterbi_labelings=config.mira_k_best_viterbi_labelings,
-                           k_random_labelings=config.mira_k_random_labelings,
-                           save_model_after_every_iteration=True)
+    trainer.fit_using_mira_algorithm(iterations=config.mira_iterations,
+                                     k_best_viterbi_labelings=config.mira_k_best_viterbi_labelings,
+                                     k_random_labelings=config.mira_k_random_labelings,
+                                     save_model_after_every_iteration=True)
     # trainer.save_model()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
 
 
-def train_multiple_configurations():
+def train_multiple_configurations(NR_PROCESSES: int = 4):
     """
     Creates a processes pool, spawns all training jobs into the pool, wait for all jobs executions to finish.
     """
     from multiprocessing import Pool
-    config = Config()
-    NR_PROCESSES = 4
+    config = SentimentModelConfiguration()
     jobs_status = {'total_nr_jobs': 0, 'nr_completed_jobs': 0, 'nr_failed_jobs': 0}
     failed_configurations = []
 
@@ -120,12 +118,12 @@ def train_multiple_configurations():
                 nr_failed=jobs_status['nr_failed_jobs']
             ))
 
-    def on_success(conf: Config, value):
+    def on_success(conf: SentimentModelConfiguration, value):
         jobs_status['nr_completed_jobs'] += 1
         print('========   Successfully completed job over configuration: ' + conf.to_string('  ') + '   ========')
         print_jobs_progress()
 
-    def on_error(conf: Config, value):
+    def on_error(conf: SentimentModelConfiguration, value):
         failed_configurations.append(conf)
         print('XXXXXXXX   FAILED job over configuration: ' + conf.to_string('  ') + '   XXXXXXXX')
         jobs_status['nr_failed_jobs'] += 1
@@ -162,47 +160,53 @@ def main():
     # train_multiple_configurations()
     # exit(0)
 
-    config = Config()
-    perform_training(config)
-    exit(0)
+    # config = SentimentModelConfiguration()
+    # perform_training(config)
+    # exit(0)
 
-    if os.path.isfile(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename):
-        with open(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename, 'rb') as f:
-            features_vector = pickle.load(f)
+    class ExecutionParams:
+        perform_train = True
+        evaluate_over_train_set = True
+        evaluate_over_test_set = True
+
+    execution_params = ExecutionParams()
+    config = SentimentModelConfiguration()
+    if False and os.path.isfile(FEATURES_EXTRACTORS_PATH + config.train_corpus_features_extractor_filename):
+        with open(FEATURES_EXTRACTORS_PATH + config.train_corpus_features_extractor_filename, 'rb') as f:
+            features_extractor = pickle.load(f)
         dataset = load_dataset(config)
     else:
         dataset = load_dataset(config)
-        # feature_vector = FeatureVector(dataset.train)
-        features_vector = CorpusFeaturesExtractor(config)
-        features_vector.generate_features_from_corpus(dataset.train)
-        with open(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename, 'wb') as f:
-            pickle.dump(features_vector, f)
+        features_extractor = CorpusFeaturesExtractor(config)
+        features_extractor.generate_features_from_corpus(dataset.train)
+        with open(FEATURES_EXTRACTORS_PATH + config.train_corpus_features_extractor_filename, 'wb') as f:
+            pickle.dump(features_extractor, f)
 
-    features_vector.initialize_corpus_features(dataset.train)
-    features_vector.initialize_corpus_features(dataset.test)
-    trainer = SentimentModelTrainer(dataset.train.clone(), features_vector, config)
+    features_extractor.initialize_corpus_features(dataset.train)
+    features_extractor.initialize_corpus_features(dataset.test)
+    trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, config)
 
     print('Model name: ' + config.model_name)
 
-    if config.perform_train:
+    if execution_params.perform_train:
         trainer.evaluate_feature_vectors()
-        trainer.mira_algorithm(iterations=config.mira_iterations,
-                               k_best_viterbi_labelings=config.mira_k_best_viterbi_labelings,
-                               k_random_labelings=config.mira_k_random_labelings)
+        trainer.fit_using_mira_algorithm(iterations=config.mira_iterations,
+                                         k_best_viterbi_labelings=config.mira_k_best_viterbi_labelings,
+                                         k_random_labelings=config.mira_k_random_labelings)
         trainer.save_model(config.model_weights_filename)
 
     evaluation_datasets = []
-    if config.evaluate_over_train_set:
+    if execution_params.evaluate_over_train_set:
         evaluation_datasets.append(('train', dataset.train))
-    if config.evaluate_over_test_set:
+    if execution_params.evaluate_over_test_set:
         evaluation_datasets.append(('test', dataset.test))
 
     for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
         print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
-        if config.perform_train:
-            tester = SentimentModelTester(evaluation_dataset.clone(), features_vector, config.model_type, w=trainer.w)
+        if execution_params.perform_train:
+            tester = SentimentModelTester(evaluation_dataset.clone(), features_extractor, config.model_type, w=trainer.w)
         else:
-            tester = SentimentModelTester(evaluation_dataset.clone(), features_vector, config.model_type)
+            tester = SentimentModelTester(evaluation_dataset.clone(), features_extractor, config.model_type)
             tester.load_model(config.model_weights_filename)
 
         tester.inference()

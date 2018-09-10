@@ -56,11 +56,7 @@ class ConfigurationOptionPrinter:
         return name_and_separator + printed_value
 
 
-class Config:
-    perform_train = True
-    evaluate_over_train_set = True
-    evaluate_over_test_set = True
-
+class SentimentModelConfiguration:
     mira_k_random_labelings = 0
     mira_k_best_viterbi_labelings = 15
     mira_iterations = 5
@@ -113,7 +109,7 @@ class Config:
     )
 
     @property
-    def train_corpus_feature_vector_filename(self):
+    def train_corpus_features_extractor_filename(self):
         if not hasattr(self, '__train_corpus_feature_vector_filename') or not self.__train_corpus_feature_vector_filename:
             self.__train_corpus_feature_vector_filename = 'corpus-feature-vector__' + '__'.join(
                 filter(bool, (conf.print(self) for conf in self.corpus_configurations)))
@@ -168,7 +164,7 @@ class Config:
         assert(self.model_type in MODELS)
 
     def clone(self):
-        new_config = Config()
+        new_config = SentimentModelConfiguration()
         for param_name, _, default in self.get_all_settable_params():
             setattr(new_config, param_name, getattr(self, param_name, default))
         return new_config

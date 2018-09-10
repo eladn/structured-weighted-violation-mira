@@ -1,13 +1,15 @@
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
-from config import Config
+from sentiment_model_configuration import SentimentModelConfiguration
 from utils import ProgressBar, Singleton
 from constants import MODELS, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, STRUCTURED_JOINT, \
     DOCUMENT_LABELS, SENTENCE_LABELS
 
 import numpy as np
 from abc import ABC, abstractmethod
+from itertools import islice
+from scipy.sparse import csr_matrix
 
 
 def sanitize_labels(document: Document, sentence: Sentence,
@@ -242,7 +244,7 @@ class CorpusFeaturesExtractor:
         PreSentenceSentenceDocumentFeatureGroup()
     ]
 
-    def __init__(self, config: Config):
+    def __init__(self, config: SentimentModelConfiguration):
         self._config = config
         # A mapping from feature attribute to its index
         self._fa_to_fa_idx_mapping = {fa_type_idx: dict()
@@ -278,6 +280,7 @@ class CorpusFeaturesExtractor:
         self._features_dilution()
         self._initialize_features_idxs()
         self._initialize_sentences_features_for_corpus(corpus)
+        print('Number of features: {}'.format(self.nr_features))
 
     def _initialize_feature_groups(self):
         # TODO: doc!
@@ -432,3 +435,17 @@ class CorpusFeaturesExtractor:
               for fg_idx in self.iterate_over_feature_groups_indeces_of_sentence(
                 document, sentence, document_label, sentence_label, pre_sentence_label)]
         return np.concatenate(fv)
+
+    def evaluate_document_feature_vector(self, document: Document, y_tag=None):
+        # TODO if not structured - should not count from 1
+        y_document = y_tag[0] if y_tag is not None else None
+        row_ind, col_ind = [], []
+        for sentence in islice(document.sentences, 1, None):  # TODO
+            y_sentence = y_tag[sentence.index + 1] if y_tag is not None else None
+            y_pre_sentence = y_tag[sentence.index] if y_tag is not None else None
+            feature_indices = self.evaluate_clique_feature_vector(
+                document, sentence, y_document, y_sentence, y_pre_sentence)
+            col_ind += list(feature_indices)  # TODO: consider stacking it all in array (size can be known)
+            row_ind += [sentence.index - 1 for _ in feature_indices]
+        return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)),
+                          shape=(document.count_sentences() - 1, self.nr_features))  # TODO
