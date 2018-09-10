@@ -25,23 +25,18 @@ from config import Config
 
 class SentimentModelTrainer:
     def __init__(self, corpus: Corpus, features_vector: CorpusFeaturesVector, config: Config):
+        if not isinstance(corpus, Corpus):
+            raise ValueError('The corpus argument is not a Corpus object')
+        if not isinstance(features_vector, CorpusFeaturesVector):
+            raise ValueError('The features vector argument is not a CorpusFeaturesVector object')
+        if not isinstance(config, Config):
+            raise ValueError('The config argument is not a Config object')
         config.verify()
-        if DEBUG:
-            if not isinstance(corpus, Corpus):
-                raise Exception('The corpus argument is not a Corpus object')
         self.corpus = corpus
         self.features_vector = features_vector
-        self.empirical_counts = None
         self.evaluated_feature_vectors = []
-        self.w = None
-        self.config = config
-
-    def generate_features(self):
-        start_time = time.time()
-        # self.features_vector.initialize_features()
         self.w = np.zeros(self.features_vector.size)
-        print("generate_feature done: {0:.3f} seconds".format(time.time() - start_time))
-        print("Features count: {}".format(self.features_vector.size))
+        self.config = config
 
     def evaluate_feature_vectors(self):
         start_time = time.time()
