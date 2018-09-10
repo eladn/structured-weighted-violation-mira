@@ -1,5 +1,5 @@
 from corpus import Corpus
-from corpus_features_vector import CorpusFeaturesVector
+from corpus_features_vector import CorpusFeaturesExtractor
 from sentiment_model_trainer import SentimentModelTrainer
 from sentiment_model_tester import SentimentModelTester
 from config import Config
@@ -67,7 +67,7 @@ def load_feature_vector_and_dataset(config: Config):
     else:
         dataset = load_dataset(config)
         # feature_vector = FeatureVector(dataset.train)
-        features_vector = CorpusFeaturesVector(config)
+        features_vector = CorpusFeaturesExtractor(config)
         features_vector.generate_features_from_corpus(dataset.train)
         with open(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename, 'wb') as f:
             pickle.dump(features_vector, f)
@@ -85,9 +85,10 @@ def load_feature_vector_and_dataset(config: Config):
 
 
 def perform_training(config: Config, job_number: int=None):
-    fd = os.open("./run_results/training_run_results__" + config.model_name + ".txt", os.O_RDWR | os.O_CREAT)
-    os.dup2(fd, 1)
-    os.dup2(fd, 2)
+    if job_number is not None:
+        fd = os.open("./run_results/training_run_results__" + config.model_name + ".txt", os.O_RDWR | os.O_CREAT)
+        os.dup2(fd, 1)
+        os.dup2(fd, 2)
 
     print('Model name: ' + config.to_string(', '))
     features_vector, dataset = load_feature_vector_and_dataset(config)
@@ -158,8 +159,8 @@ def train_multiple_configurations():
 
 
 def main():
-    train_multiple_configurations()
-    exit(0)
+    # train_multiple_configurations()
+    # exit(0)
 
     config = Config()
     perform_training(config)
@@ -172,7 +173,7 @@ def main():
     else:
         dataset = load_dataset(config)
         # feature_vector = FeatureVector(dataset.train)
-        features_vector = CorpusFeaturesVector(config)
+        features_vector = CorpusFeaturesExtractor(config)
         features_vector.generate_features_from_corpus(dataset.train)
         with open(FEATURES_VECTORS_PATH + config.train_corpus_feature_vector_filename, 'wb') as f:
             pickle.dump(features_vector, f)

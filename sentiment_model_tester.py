@@ -8,12 +8,12 @@ from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, S
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
-from corpus_features_vector import CorpusFeaturesVector
+from corpus_features_vector import CorpusFeaturesExtractor
 from utils import get_sorted_highest_k_elements_in_matrix, ProgressBar, print_title
 
 
 class SentimentModelTester:
-    def __init__(self, corpus: Corpus, features_vector: CorpusFeaturesVector, model, w: np.ndarray=None):
+    def __init__(self, corpus: Corpus, features_vector: CorpusFeaturesExtractor, model, w: np.ndarray=None):
         assert model in MODELS
         if DEBUG:
             if not isinstance(corpus, Corpus):
@@ -43,14 +43,30 @@ class SentimentModelTester:
 
         # Forward pass: calculate `pi` and `bp`.
         bp, pi = None, None
+        viterbi_results_per_document_label = {document_label: {'bp': None, 'pi': None}
+                                              for document_label in DOCUMENT_LABELS}
         if infer_document_label:
             for document_label in DOCUMENT_LABELS:
                 cur_bp, cur_pi = self.viterbi_forward_pass(document, document_label=document_label, top_k=top_k)
+                viterbi_results_per_document_label[document_label]['bp'] = cur_bp
+                viterbi_results_per_document_label[document_label]['pi'] = cur_pi
                 if (bp is None and pi is None) or (cur_pi[-1].max() > pi[-1].max()):
                     bp, pi = cur_bp, cur_pi
                     document.label = document_label
+
+            # Now we have the viterbi results (pi+bp) for each document label independently.
+            # We want to find the k labelings with the highest scores.
+            # The problem is we now have the best-k for each document label.
+            # The final best-k labelings may contain labelings with different document labels.
+            # Hence, we have to merge the two viterbi results into a single top-k array.
+            # For each one of these final best-k labelings, the back-pointer (for that merge step)
+            #   stores the document label of that labeling. It indicates in which result continue
+            #   to track back in order to find the rest of that labeling (out of the 2 results).
+            pass
+
         else:
-            # `document.label` will be used as document label.
+            # Here we do not have to infer the document label.
+            # `document.label` will be used as a fixed document label.
             bp, pi = self.viterbi_forward_pass(document, document_label=None, top_k=top_k)
 
         # Backward pass: Assign the top_k sentence labelings (with highest scores) using calculated scores

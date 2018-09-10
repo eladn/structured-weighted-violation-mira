@@ -17,25 +17,25 @@ from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, S
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
-from corpus_features_vector import CorpusFeaturesVector
+from corpus_features_vector import CorpusFeaturesExtractor
 from sentiment_model_tester import SentimentModelTester
 from utils import ProgressBar, print_title, shuffle_iterate_over_batches
 from config import Config
 
 
 class SentimentModelTrainer:
-    def __init__(self, corpus: Corpus, features_vector: CorpusFeaturesVector, config: Config):
+    def __init__(self, corpus: Corpus, features_vector: CorpusFeaturesExtractor, config: Config):
         if not isinstance(corpus, Corpus):
             raise ValueError('The corpus argument is not a Corpus object')
-        if not isinstance(features_vector, CorpusFeaturesVector):
-            raise ValueError('The features vector argument is not a CorpusFeaturesVector object')
+        if not isinstance(features_vector, CorpusFeaturesExtractor):
+            raise ValueError('The features vector argument is not a CorpusFeaturesExtractor object')
         if not isinstance(config, Config):
             raise ValueError('The config argument is not a Config object')
         config.verify()
         self.corpus = corpus
         self.features_vector = features_vector
         self.evaluated_feature_vectors = []
-        self.w = np.zeros(self.features_vector.size)
+        self.w = np.zeros(self.features_vector.nr_features)
         self.config = config
 
     def evaluate_feature_vectors(self):
@@ -60,7 +60,7 @@ class SentimentModelTrainer:
             col_ind += list(feature_indices)  # TODO: consider stacking it all in array (size can be known)
             row_ind += [sentence.index - 1 for _ in feature_indices]
         return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)),
-                          shape=(document.count_sentences() - 1, self.features_vector.size))  # TODO
+                          shape=(document.count_sentences() - 1, self.features_vector.nr_features))  # TODO
 
     def mira_algorithm(self, iterations=5, k_best_viterbi_labelings=2, k_random_labelings=0, save_model_after_every_iteration: bool = False):
         optimization_time = time.time()
@@ -115,10 +115,10 @@ class SentimentModelTrainer:
         print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
 
     def extract_qp_matrices(self, documents_batch, feature_vectors_batch, mira_labelings_batch):
-        M = sparse.eye(self.features_vector.size)
+        M = sparse.eye(self.features_vector.nr_features)
         q = np.copy(self.w) * -1
         nr_labelings = sum(len(labelings) for labelings in mira_labelings_batch)
-        G = np.zeros((nr_labelings, self.features_vector.size))
+        G = np.zeros((nr_labelings, self.features_vector.nr_features))
         h = []
 
         next_G_line_idx = 0
@@ -149,7 +149,7 @@ class SentimentModelTrainer:
                 h.append(-y_tag_loss)
         G = csr_matrix(G)
         h = np.array(h).reshape(-1, )
-        return M, q.reshape(self.features_vector.size, ), G, h
+        return M, q.reshape(self.features_vector.nr_features, ), G, h
 
     @staticmethod
     def extract_random_labeling_subset(document: Document, k: int, use_document_tag: bool=False):
