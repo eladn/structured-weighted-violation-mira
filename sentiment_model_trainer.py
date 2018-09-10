@@ -67,7 +67,7 @@ class SentimentModelTrainer:
         return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)),
                           shape=(document.count_sentences() - 1, self.features_vector.size))  # TODO
 
-    def mira_algorithm(self, iterations=5, k_best_viterbi_labelings=2, k_random_labelings=0):
+    def mira_algorithm(self, iterations=5, k_best_viterbi_labelings=2, k_random_labelings=0, save_model_after_every_iteration: bool = False):
         optimization_time = time.time()
         print_title("Training model: {model}, k-best-viterbi = {k_viterbi}, k-random = {k_rnd}, iterations = {iter}".format(
             model=self.config.model_type,
@@ -112,6 +112,10 @@ class SentimentModelTrainer:
                     warn(warn_msg)
                 else:
                     self.w = w
+            if save_model_after_every_iteration:
+                cnf = self.config.clone()
+                cnf.mira_iterations = cur_iter
+                self.save_model(cnf.model_weights_filename)
         pb.finish()
         print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
 
@@ -159,9 +163,13 @@ class SentimentModelTrainer:
             [random.choice(SENTENCE_LABELS) for _ in range(document.count_sentences())]
             for _ in range(k)]
 
-    def save_model(self, model_name: str):
-        np.savetxt(MODELS_PATH + model_name, self.w)
+    def save_model(self, model_weights_filename: str = None):
+        if model_weights_filename is None:
+            model_weights_filename = self.config.model_weights_filename
+        np.savetxt(MODELS_PATH + model_weights_filename, self.w)
 
-    def load_model(self, model_name: str):
-        self.w = np.loadtxt(MODELS_PATH + model_name)
+    def load_model(self, model_weights_filename: str = None):
+        if model_weights_filename is None:
+            model_weights_filename = self.config.model_weights_filename
+        self.w = np.loadtxt(MODELS_PATH + model_weights_filename)
 
