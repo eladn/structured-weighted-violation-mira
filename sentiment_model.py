@@ -240,43 +240,32 @@ class SentimentModel:
     def evaluate_model(self, inferred_corpus: Corpus, ground_truth_corpus: Corpus):
         assert self.w is not None
 
-        if self.model_config.model_type == SENTENCE_CLASSIFIER:
+        results = {}
+        if self.model_config.infer_sentences_labels:
             sentences_results = {
                 "correct": 0,
                 "errors": 0
             }
-            for d1, d2 in zip(inferred_corpus.documents, ground_truth_corpus.documents):
-                for s1, s2 in zip(d1.sentences, d2.sentences):
-                    if s1.label == s2.label:
-                        sentences_results["correct"] += 1
-                    else:
-                        sentences_results["errors"] += 1
-
-            return sentences_results, sentences_results["correct"] / sum(sentences_results.values())
-        else:
-            document_results = {
-                "correct": 0,
-                "errors": 0
-            }
-            sentences_results = {
-                "correct": 0,
-                "errors": 0
-            }
-            for d1, d2 in zip(inferred_corpus.documents, ground_truth_corpus.documents):
-
-                if d1.label == d2.label:
-                    document_results["correct"] += 1
+            for (_, sentence_inferred), (_, sentence_ground_truth) in zip(inferred_corpus, ground_truth_corpus):
+                if sentence_inferred.label == sentence_ground_truth.label:
+                    sentences_results["correct"] += 1
                 else:
-                    document_results["errors"] += 1
-
-                for s1, s2 in zip(d1.sentences, d2.sentences):
-                    if s1.label == s2.label:
-                        sentences_results["correct"] += 1
-                    else:
-                        sentences_results["errors"] += 1
-
-            return document_results, document_results["correct"] / sum(document_results.values()), \
-                sentences_results, sentences_results["correct"] / sum(sentences_results.values())
+                    sentences_results["errors"] += 1
+            sentences_results["accuracy"] = sentences_results["correct"] / sum(sentences_results.values())
+            results['sentences'] = sentences_results
+        if self.model_config.infer_document_label:
+            documents_results = {
+                "correct": 0,
+                "errors": 0
+            }
+            for document_inferred, document_ground_truth in zip(inferred_corpus.documents, ground_truth_corpus.documents):
+                if document_inferred.label == document_ground_truth.label:
+                    documents_results["correct"] += 1
+                else:
+                    documents_results["errors"] += 1
+            documents_results["accuracy"] = documents_results["correct"] / sum(documents_results.values())
+            results["documents"] = documents_results
+        return results
 
     # def print_results_to_file(self, tagged_file, model_name):
     #     path = TEST_PATH

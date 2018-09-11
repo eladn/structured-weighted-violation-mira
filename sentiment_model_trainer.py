@@ -58,7 +58,7 @@ class SentimentModelTrainer:
             iter=self.model_config.mira_iterations))
         nr_batchs_per_iteration = int(np.ceil(len(self.train_corpus.documents) / self.model_config.mira_batch_size))
         pb = ProgressBar(self.model_config.mira_iterations * nr_batchs_per_iteration)
-        test_corpus = self.train_corpus.clone()
+        test_corpus = self.train_corpus.clone(copy_labels=False)
         initial_weights = np.zeros(self.features_extractor.nr_features)
         model = SentimentModel(self.features_extractor, self.model_config, initial_weights)
         for cur_iter in range(1, self.model_config.mira_iterations+1):
@@ -132,16 +132,19 @@ class SentimentModelTrainer:
                 next_G_line_idx += 1
 
                 # y_tag_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]])
-                y_tag_document_loss = zero_one_loss([y[0]], [y_tag[0]])
-                y_tag_sentences_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:])
                 # y_tag_loss = y_tag_sentences_loss * y_tag_document_loss  # original loss
 
-                if self.model_config.model_type == DOCUMENT_CLASSIFIER:
+                y_tag_document_loss = 0
+                if self.model_config.infer_document_label:
+                    y_tag_document_loss = zero_one_loss([y[0]], [y_tag[0]])
+
+                if not self.model_config.infer_sentences_labels:
                     y_tag_loss = y_tag_document_loss
                 else:
+                    y_tag_sentences_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:])
                     y_tag_loss = y_tag_sentences_loss
 
-                    if self.model_config.model_type == STRUCTURED_JOINT:
+                    if self.model_config.infer_document_label:
                         if self.model_config.loss_type == 'mult':
                             y_tag_loss *= y_tag_document_loss
                         elif self.model_config.loss_type == 'plus':

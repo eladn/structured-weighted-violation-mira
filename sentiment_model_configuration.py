@@ -126,6 +126,10 @@ class SentimentModelConfiguration:
     def infer_document_label(self):
         return self.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}
 
+    @property
+    def infer_sentences_labels(self):
+        return self.model_type != DOCUMENT_CLASSIFIER
+
     model_configurations = (
         ConfigurationOptionPrinter(attribute='model_type', name='model'),
         ConfigurationOptionPrinter(attribute='mira_k_random_labelings', name='k-rnd', print_iff_true=True),
