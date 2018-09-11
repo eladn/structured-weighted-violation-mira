@@ -11,31 +11,33 @@ from sklearn.metrics import hamming_loss, zero_one_loss
 from warnings import warn
 import sys
 
-from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
-    SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, MODELS, TEST_PATH, NR_SENTENCE_LABELS
+from constants import STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, \
+    DOCUMENT_LABELS, SENTENCE_LABELS, TEST_PATH, NR_SENTENCE_LABELS
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
 from corpus_features_extractor import CorpusFeaturesExtractor
-from sentiment_model_tester import SentimentModelTester
+from sentiment_model import SentimentModel
 from utils import ProgressBar, print_title, shuffle_iterate_over_batches
 from sentiment_model_configuration import SentimentModelConfiguration
 
 
 class SentimentModelTrainer:
-    def __init__(self, train_corpus: Corpus, features_extractor: CorpusFeaturesExtractor, config: SentimentModelConfiguration):
+    def __init__(self, train_corpus: Corpus, features_extractor: CorpusFeaturesExtractor,
+                 model_config: SentimentModelConfiguration):
+
         if not isinstance(train_corpus, Corpus):
-            raise ValueError('The corpus argument is not a Corpus object')
+            raise ValueError('The `train_corpus` argument is not a `Corpus` object')
         if not isinstance(features_extractor, CorpusFeaturesExtractor):
-            raise ValueError('The features vector argument is not a CorpusFeaturesExtractor object')
-        if not isinstance(config, SentimentModelConfiguration):
-            raise ValueError('The config argument is not a SentimentModelConfiguration object')
-        config.verify()
+            raise ValueError('The `features_extractor` argument is not a `CorpusFeaturesExtractor` object')
+        if not isinstance(model_config, SentimentModelConfiguration):
+            raise ValueError('The `model_config` argument is not a `SentimentModelConfiguration` object')
+        model_config.verify()
+
         self.train_corpus = train_corpus
         self.features_extractor = features_extractor
         self.evaluated_feature_vectors = []
-        self.w = np.zeros(self.features_extractor.nr_features)
-        self.config = config
+        self.model_config = model_config
 
     def evaluate_feature_vectors(self):
         start_time = time.time()
@@ -47,24 +49,29 @@ class SentimentModelTrainer:
         pb.finish()
         print("evaluate_feature_vectors done: {0:.3f} seconds".format(time.time() - start_time))
 
-    def fit_using_mira_algorithm(self, iterations=5, k_best_viterbi_labelings=2, k_random_labelings=0, save_model_after_every_iteration: bool = False):
+    def fit_using_mira_algorithm(self, save_model_after_every_iteration: bool = False):
         optimization_time = time.time()
         print_title("Training model: {model}, k-best-viterbi = {k_viterbi}, k-random = {k_rnd}, iterations = {iter}".format(
-            model=self.config.model_type,
-            k_viterbi=k_best_viterbi_labelings,
-            k_rnd=k_random_labelings,
-            iter=iterations))
-        nr_batchs_per_iteration = int(np.ceil(len(self.train_corpus.documents) / self.config.mira_batch_size))
-        pb = ProgressBar(iterations * nr_batchs_per_iteration)
-        tester = SentimentModelTester(self.train_corpus.clone(), self.features_extractor, self.config.model_type)
-        for cur_iter in range(1, iterations+1):
+            model=self.model_config.model_type,
+            k_viterbi=self.model_config.mira_k_best_viterbi_labelings,
+            k_rnd=self.model_config.mira_k_random_labelings,
+            iter=self.model_config.mira_iterations))
+        nr_batchs_per_iteration = int(np.ceil(len(self.train_corpus.documents) / self.model_config.mira_batch_size))
+        pb = ProgressBar(self.model_config.mira_iterations * nr_batchs_per_iteration)
+        test_corpus = self.train_corpus.clone()
+        initial_weights = np.zeros(self.features_extractor.nr_features)
+        model = SentimentModel(self.features_extractor, self.model_config, initial_weights)
+        for cur_iter in range(1, self.model_config.mira_iterations+1):
             for document_nr, (batch_start_idx, documents_batch, test_documents_batch, feature_vectors_batch) \
                 in enumerate(shuffle_iterate_over_batches(self.train_corpus.documents,
-                                          tester.corpus.documents,
-                                          self.evaluated_feature_vectors,
-                                          batch_size=self.config.mira_batch_size), start=1):
+                                                          test_corpus.documents,
+                                                          self.evaluated_feature_vectors,
+                                                          batch_size=self.model_config.mira_batch_size), start=1):
                 task_str = 'iter: {cur_iter}/{nr_iters} -- document: {cur_doc}/{nr_docs}'.format(
-                    cur_iter=cur_iter, nr_iters=iterations, cur_doc=batch_start_idx+1, nr_docs=len(self.train_corpus.documents)
+                    cur_iter=cur_iter,
+                    nr_iters=self.model_config.mira_iterations,
+                    cur_doc=batch_start_idx+1,
+                    nr_docs=len(self.train_corpus.documents)
                 )
                 pb.start_next_task(task_str)
 
@@ -72,15 +79,15 @@ class SentimentModelTrainer:
                 mira_labelings_batch = []
                 for document, test_document in zip(documents_batch, test_documents_batch):
                     document_generated_labelings = []
-                    if k_random_labelings > 0:
+                    if self.model_config.mira_k_random_labelings > 0:
                         document_generated_labelings = self.extract_random_labeling_subset(
-                            document, k_random_labelings, use_document_tag=False)
-                    if k_best_viterbi_labelings > 0:
-                        tester.w = self.w
-                        top_k = min(k_best_viterbi_labelings, NR_SENTENCE_LABELS ** document.count_sentences())
-                        viterbi_labelings = tester.viterbi_inference(
+                            document, self.model_config.mira_k_random_labelings,
+                            use_document_tag=self.model_config.infer_document_label)
+                    if self.model_config.mira_k_best_viterbi_labelings > 0:
+                        top_k = min(self.model_config.mira_k_best_viterbi_labelings, NR_SENTENCE_LABELS ** document.count_sentences())
+                        viterbi_labelings = model.viterbi_inference(
                             test_document,
-                            infer_document_label=(self.config.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}),
+                            infer_document_label=self.model_config.infer_document_label,
                             top_k=top_k,
                             assign_best_labeling=False)
                         document_generated_labelings += viterbi_labelings
@@ -88,24 +95,26 @@ class SentimentModelTrainer:
                     assert(len(document_generated_labelings) >= 1)
                     mira_labelings_batch.append(document_generated_labelings)
 
-                P, q, G, h = self.extract_qp_matrices(documents_batch, feature_vectors_batch, mira_labelings_batch)
+                P, q, G, h = self.extract_qp_matrices(
+                    model.w, documents_batch, feature_vectors_batch, mira_labelings_batch)
                 w = solve_qp(P, q, G, h, solver="osqp")
                 if np.any(np.equal(w, None)):
                     print(file=sys.stderr)
                     warn_msg = "QP solver returned `None`s solution vector. Weights vector `w` has not been updated. [{}]".format(task_str)
                     warn(warn_msg)
                 else:
-                    self.w = w
+                    model.w = w
             if save_model_after_every_iteration:
-                cnf = self.config.clone()
+                cnf = self.model_config.clone()
                 cnf.mira_iterations = cur_iter
-                self.save_model(cnf.model_weights_filename)
+                model.save(cnf.model_weights_filename)
         pb.finish()
-        print("Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
+        print("MIRA training completed. Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
+        return model
 
-    def extract_qp_matrices(self, documents_batch, feature_vectors_batch, mira_labelings_batch):
+    def extract_qp_matrices(self, w, documents_batch, feature_vectors_batch, mira_labelings_batch):
         M = sparse.eye(self.features_extractor.nr_features)
-        q = np.copy(self.w) * -1
+        q = np.copy(w) * -1
         nr_labelings = sum(len(labelings) for labelings in mira_labelings_batch)
         G = np.zeros((nr_labelings, self.features_extractor.nr_features))
         h = []
@@ -127,15 +136,18 @@ class SentimentModelTrainer:
                 y_tag_sentences_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:])
                 # y_tag_loss = y_tag_sentences_loss * y_tag_document_loss  # original loss
 
-                y_tag_loss = y_tag_sentences_loss
+                if self.model_config.model_type == DOCUMENT_CLASSIFIER:
+                    y_tag_loss = y_tag_document_loss
+                else:
+                    y_tag_loss = y_tag_sentences_loss
 
-                if self.config.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}:
-                    if self.config.loss_type == 'mult':
-                        y_tag_loss *= y_tag_document_loss
-                    elif self.config.loss_type == 'plus':
-                        y_tag_loss += self.config.doc_loss_factor * y_tag_document_loss
-                    elif self.config.loss_type == 'max':
-                        y_tag_loss = max(y_tag_loss, y_tag_document_loss)
+                    if self.model_config.model_type == STRUCTURED_JOINT:
+                        if self.model_config.loss_type == 'mult':
+                            y_tag_loss *= y_tag_document_loss
+                        elif self.model_config.loss_type == 'plus':
+                            y_tag_loss += self.model_config.doc_loss_factor * y_tag_document_loss
+                        elif self.model_config.loss_type == 'max':
+                            y_tag_loss = max(y_tag_loss, y_tag_document_loss)
 
                 h.append(-y_tag_loss)
         G = csr_matrix(G)
@@ -148,14 +160,3 @@ class SentimentModelTrainer:
             [document.label if use_document_tag else random.choice(DOCUMENT_LABELS)] +
             [random.choice(SENTENCE_LABELS) for _ in range(document.count_sentences())]
             for _ in range(k)]
-
-    def save_model(self, model_weights_filename: str = None):
-        if model_weights_filename is None:
-            model_weights_filename = self.config.model_weights_filename
-        np.savetxt(MODELS_PATH + model_weights_filename, self.w)
-
-    def load_model(self, model_weights_filename: str = None):
-        if model_weights_filename is None:
-            model_weights_filename = self.config.model_weights_filename
-        self.w = np.loadtxt(MODELS_PATH + model_weights_filename)
-

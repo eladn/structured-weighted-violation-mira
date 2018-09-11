@@ -4,12 +4,14 @@ from sentence import Sentence
 from sentiment_model_configuration import SentimentModelConfiguration
 from utils import ProgressBar, Singleton
 from constants import MODELS, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, STRUCTURED_JOINT, \
-    DOCUMENT_LABELS, SENTENCE_LABELS
+    DOCUMENT_LABELS, SENTENCE_LABELS, FEATURES_EXTRACTORS_PATH
 
 import numpy as np
 from abc import ABC, abstractmethod
 from itertools import islice
 from scipy.sparse import csr_matrix
+import pickle
+import os
 
 
 def sanitize_labels(document: Document, sentence: Sentence,
@@ -244,8 +246,8 @@ class CorpusFeaturesExtractor:
         PreSentenceSentenceDocumentFeatureGroup()
     ]
 
-    def __init__(self, config: SentimentModelConfiguration):
-        self._config = config
+    def __init__(self, model_config: SentimentModelConfiguration):
+        self._model_config = model_config
         # A mapping from feature attribute to its index
         self._fa_to_fa_idx_mapping = {fa_type_idx: dict()
                                       for fa_type_idx in SentenceFeatureAttributesExtractor().feature_attribute_types}
@@ -256,6 +258,19 @@ class CorpusFeaturesExtractor:
         self._nr_features = 0
         self._feature_groups_types = []
         self._features_idxs = None
+
+    @staticmethod
+    def load_or_create(model_config: SentimentModelConfiguration, train_corpus: Corpus):
+        if False and os.path.isfile(FEATURES_EXTRACTORS_PATH + model_config.train_corpus_features_extractor_filename):
+            with open(FEATURES_EXTRACTORS_PATH + model_config.train_corpus_features_extractor_filename, 'rb') as f:
+                features_extractor = pickle.load(f)
+            features_extractor.initialize_corpus_features(train_corpus)
+        else:
+            features_extractor = CorpusFeaturesExtractor(model_config)
+            features_extractor.generate_features_from_corpus(train_corpus)
+            with open(FEATURES_EXTRACTORS_PATH + model_config.train_corpus_features_extractor_filename, 'wb') as f:
+                pickle.dump(features_extractor, f)
+        return features_extractor
 
     @property
     def nr_features(self):
@@ -287,7 +302,7 @@ class CorpusFeaturesExtractor:
         self._feature_groups_types = [
             feature_group
             for feature_group in self.all_feature_groups_types
-            if self._config.model_type in feature_group.use_in_models]
+            if self._model_config.model_type in feature_group.use_in_models]
 
         next_fg_idx = 0
         self._fg_to_fg_idx_mapping = {}
@@ -315,8 +330,8 @@ class CorpusFeaturesExtractor:
         # Feature dilution: limiting the model in order to avoid over-fitting.
 
         # dilution - method 1: remove features that has occurred a negligible number of times in the corpus.
-        if self._config.min_nr_feature_occurrences is not None:
-            self._fa_in_fg_mask = self._fa_in_fg_mask & (self.fa_in_fg_count >= self._config.min_nr_feature_occurrences)
+        if self._model_config.min_nr_feature_occurrences is not None:
+            self._fa_in_fg_mask = self._fa_in_fg_mask & (self.fa_in_fg_count >= self._model_config.min_nr_feature_occurrences)
 
         # dilution - method 2: randomly choosing a ratio of the features.
         # rnd = np.random.rand(*self.fa_in_fg_mask.shape) < self.config.features_dilution_ratio

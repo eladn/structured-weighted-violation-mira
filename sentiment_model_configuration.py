@@ -72,8 +72,8 @@ class SentimentModelConfiguration:
 
     # model_type = DOCUMENT_CLASSIFIER
     # model_type = SENTENCE_CLASSIFIER
-    model_type = STRUCTURED_JOINT
-    # model_type = SENTENCE_STRUCTURED
+    # model_type = STRUCTURED_JOINT
+    model_type = SENTENCE_STRUCTURED
 
     @property
     def pos_docs_train_filename(self):
@@ -122,6 +122,10 @@ class SentimentModelConfiguration:
             loss_type_str += str(self.doc_loss_factor)
         return loss_type_str
 
+    @property
+    def infer_document_label(self):
+        return self.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}
+
     model_configurations = (
         ConfigurationOptionPrinter(attribute='model_type', name='model'),
         ConfigurationOptionPrinter(attribute='mira_k_random_labelings', name='k-rnd', print_iff_true=True),
@@ -130,7 +134,7 @@ class SentimentModelConfiguration:
         ConfigurationOptionPrinter(attribute='mira_batch_size', name='batch',
                                    print_condition=lambda value, _: value and int(value) > 1),
         ConfigurationOptionPrinter(attribute='loss_type_str', name='loss',
-                                   print_condition=lambda _, config: config.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}),
+                                   print_condition=lambda _, config: config.model_type == STRUCTURED_JOINT),
         ConfigurationOptionPrinter(attribute='min_nr_feature_occurrences', name='min-feature-occ',
                                    print_iff_true=True),
         ConfigurationOptionPrinter(attribute='docs_train_filename_base_wo_ext', name='train-set'),

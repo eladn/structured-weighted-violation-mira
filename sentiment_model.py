@@ -3,34 +3,37 @@ import numpy as np
 import time
 from itertools import chain
 
-from constants import DEBUG, DATA_PATH, STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
+from constants import STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, \
     SENTENCE_STRUCTURED, MODELS_PATH, DOCUMENT_LABELS, SENTENCE_LABELS, NR_SENTENCE_LABELS, \
-    NR_DOCUMENT_LABELS, MODELS, TEST_PATH
+    NR_DOCUMENT_LABELS, TEST_PATH
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
 from corpus_features_extractor import CorpusFeaturesExtractor
-from utils import get_sorted_highest_k_elements_in_matrix, ProgressBar, print_title
+from sentiment_model_configuration import SentimentModelConfiguration
+from utils import get_sorted_highest_k_elements_in_matrix, ProgressBar
 
 
-class SentimentModelTester:
-    def __init__(self, corpus: Corpus, features_vector: CorpusFeaturesExtractor, model_type, w: np.ndarray=None):
-        assert model_type in MODELS
-        if DEBUG:
-            if not isinstance(corpus, Corpus):
-                raise Exception('The corpus argument is not a Corpus object')
-        self.matrix = np.zeros((len(SENTENCE_LABELS), len(SENTENCE_LABELS)))
-        self.corpus = corpus
-        self.features_vector = features_vector
+class SentimentModel:
+    def __init__(self, features_extractor: CorpusFeaturesExtractor,
+                 model_config: SentimentModelConfiguration, w: np.ndarray=None):
+
+        if not isinstance(features_extractor, CorpusFeaturesExtractor):
+            raise ValueError('The `features_extractor` argument is not a `CorpusFeaturesExtractor` object')
+        if not isinstance(model_config, SentimentModelConfiguration):
+            raise ValueError('The `model_config` argument is not a `SentimentModelConfiguration` object')
+        model_config.verify()
+
+        self.features_extractor = features_extractor
+        self.model_config = model_config
         self.w = w
-        self.model_type = model_type
 
     def sentence_score(self, document: Document, sentence: Sentence,
                        document_label=None, sentence_label=None, pre_sentence_label=None):
-        assert sentence_label in SENTENCE_LABELS
+        assert sentence_label is None or sentence_label in SENTENCE_LABELS
         assert document_label is None or document_label in DOCUMENT_LABELS
         assert pre_sentence_label is None or pre_sentence_label in SENTENCE_LABELS
-        fv = self.features_vector.evaluate_clique_feature_vector(
+        fv = self.features_extractor.evaluate_clique_feature_vector(
             document, sentence, document_label, sentence_label, pre_sentence_label)
         return np.sum(np.take(self.w, fv))
 
@@ -212,40 +215,37 @@ class SentimentModelTester:
                     best_sentence_score = temp_sentence_score
                     sentence.label = sentence_label
 
-    def inference(self):
+    def inference(self, corpus: Corpus):
         assert self.w is not None
 
         start_time = time.time()
 
-        if self.model_type == DOCUMENT_CLASSIFIER:
-            self.document_predict(self.corpus)
+        if self.model_config.model_type == DOCUMENT_CLASSIFIER:
+            self.document_predict(corpus)
 
-        elif self.model_type == SENTENCE_CLASSIFIER:
-            for document in self.corpus.documents:
+        elif self.model_config.model_type == SENTENCE_CLASSIFIER:
+            for document in corpus.documents:
                 self.sentence_predict(document)
 
-        elif self.model_type in {SENTENCE_STRUCTURED, STRUCTURED_JOINT}:
-            pb = ProgressBar(len(self.corpus.documents))
-            for i, document in enumerate(self.corpus.documents):
+        elif self.model_config.model_type in {SENTENCE_STRUCTURED, STRUCTURED_JOINT}:
+            pb = ProgressBar(len(corpus.documents))
+            for i, document in enumerate(corpus.documents):
                 pb.start_next_task()
-                self.viterbi_inference(document, infer_document_label=(self.model_type == STRUCTURED_JOINT))
+                self.viterbi_inference(
+                    document, infer_document_label=(self.model_config.model_type == STRUCTURED_JOINT))
             pb.finish()
 
         print("Inference done: {0:.3f} seconds".format(time.time() - start_time))
 
-    def load_model(self, model_name):
-        path = MODELS_PATH
-        self.w = np.loadtxt(path + model_name)
-
-    def evaluate_model(self, ground_truth: Corpus):
+    def evaluate_model(self, inferred_corpus: Corpus, ground_truth_corpus: Corpus):
         assert self.w is not None
 
-        if self.model_type == SENTENCE_CLASSIFIER:
+        if self.model_config.model_type == SENTENCE_CLASSIFIER:
             sentences_results = {
                 "correct": 0,
                 "errors": 0
             }
-            for d1, d2 in zip(self.corpus.documents, ground_truth.documents):
+            for d1, d2 in zip(inferred_corpus.documents, ground_truth_corpus.documents):
                 for s1, s2 in zip(d1.sentences, d2.sentences):
                     if s1.label == s2.label:
                         sentences_results["correct"] += 1
@@ -262,7 +262,7 @@ class SentimentModelTester:
                 "correct": 0,
                 "errors": 0
             }
-            for d1, d2 in zip(self.corpus.documents, ground_truth.documents):
+            for d1, d2 in zip(inferred_corpus.documents, ground_truth_corpus.documents):
 
                 if d1.label == d2.label:
                     document_results["correct"] += 1
@@ -286,22 +286,22 @@ class SentimentModelTester:
     #         f.write(" ".join(["{}_{}".format(t_truth.word, t_eval.tag) for t_truth, t_eval
     #                           in zip(s_truth.tokens, s_eval.tokens)]) + "\n")
 
-    def confusion_matrix(self, ground_truth: Corpus, model_name):
-        path = TEST_PATH
-
-        for d1, d2 in zip(self.corpus.documents, ground_truth.documents):
+    def confusion_matrix(self, inferred_corpus: Corpus, ground_truth_corpus: Corpus):
+        confusion_matrix = np.zeros((len(SENTENCE_LABELS), len(SENTENCE_LABELS)))
+        for d1, d2 in zip(inferred_corpus.documents, ground_truth_corpus.documents):
             for s1, s2 in zip(d1.sentences, d2.sentences):
-                self.matrix[SENTENCE_LABELS.index(s1.label)][SENTENCE_LABELS.index(s2.label)] += 1
-        np.savetxt(path + "{}__confusion_matrix.txt".format(model_name), self.matrix)
+                confusion_matrix[SENTENCE_LABELS.index(s1.label)][SENTENCE_LABELS.index(s2.label)] += 1
+        np.savetxt(TEST_PATH + "confusion_matrix__{}.txt".format(self.model_config.model_name), confusion_matrix)
 
-        file = open(path + "{}__confusion_matrix_lines.txt".format(model_name), "w")
+        file = open(TEST_PATH + "confusion_matrix_lines__{}.txt".format(self.model_config.model_name), "w")
         for i in range(len(SENTENCE_LABELS)):
             for j in range(len(SENTENCE_LABELS)):
-                value = self.matrix[i][j]
+                value = confusion_matrix[i][j]
                 file.write("Truth label: {}, Predicted label: {}, number of errors: {}\n".format(SENTENCE_LABELS[j],
                                                                                                  SENTENCE_LABELS[i],
                                                                                                  value))
         file.close()
+        return confusion_matrix
 
     # def confusion_matrix_zeros_diagonal(self):
     #     for i in range(len(TAGS)):
@@ -326,3 +326,15 @@ class SentimentModelTester:
     #     file.close()
     #     return ten_max_values
 
+    def save(self, model_weights_filename: str = None):
+        if model_weights_filename is None:
+            model_weights_filename = self.model_config.model_weights_filename
+        np.savetxt(MODELS_PATH + model_weights_filename, self.w)
+
+    @staticmethod
+    def load(model_config: SentimentModelConfiguration, features_extractor: CorpusFeaturesExtractor = None):
+        if features_extractor is None:
+            # features_extractor = CorpusFeaturesExtractor.load_or_create(model_config, dataset.train)
+            pass  # TODO: load it!
+        model_weights = np.loadtxt(MODELS_PATH + model_config.model_weights_filename)
+        return SentimentModel(features_extractor, model_config, model_weights)
