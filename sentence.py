@@ -17,10 +17,10 @@ class Sentence:
         self.feature_attributes_idxs = None
         self.features = None
 
-    def clone(self):
+    def clone(self, copy_labels: bool = True):
         new_sentence = Sentence('-1\ttv_NN', False, self.index)
         new_sentence.label = self.label
-        new_sentence.tokens = [tagged_word.clone() for tagged_word in self.tokens]
+        new_sentence.tokens = [tagged_word.clone(copy_labels) for tagged_word in self.tokens]
         new_sentence.feature_attributes_idxs = self.feature_attributes_idxs
         new_sentence.features = self.features
         return new_sentence

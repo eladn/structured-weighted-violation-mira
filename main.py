@@ -176,7 +176,7 @@ def main():
         if model is None:
             model = SentimentModel.load(model_config, features_extractor)
 
-        inferred_dataset = evaluation_dataset.clone()
+        inferred_dataset = evaluation_dataset.clone(copy_labels=False)
         model.inference(inferred_dataset)
 
         evaluation_set_ground_truth = evaluation_dataset.clone()

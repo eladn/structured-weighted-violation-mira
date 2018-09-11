@@ -9,9 +9,10 @@ class Document:
         self.label = label
         self.index = index
 
-    def clone(self):
-        new_doc = Document(self.label, self.index)
-        new_doc.sentences = [sentence.clone() for sentence in self.sentences]
+    def clone(self, copy_labels: bool = True):
+        label = self.label if copy_labels else None
+        new_doc = Document(label, self.index)
+        new_doc.sentences = [sentence.clone(copy_labels) for sentence in self.sentences]
         return new_doc
 
     def load_sentence(self, line, insert_sec_labels):

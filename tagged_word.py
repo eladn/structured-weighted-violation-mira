@@ -14,8 +14,9 @@ class TaggedWord:
         self.word = word
         self.tag = tag
 
-    def clone(self):
-        return TaggedWord(self.word, self.tag)
+    def clone(self, copy_tag: bool = True):
+        tag = self.tag if copy_tag else None
+        return TaggedWord(self.word, tag)
 
     @staticmethod
     def split_word_tag(word_tag):
