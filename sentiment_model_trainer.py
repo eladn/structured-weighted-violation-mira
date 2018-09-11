@@ -78,7 +78,11 @@ class SentimentModelTrainer:
                     if k_best_viterbi_labelings > 0:
                         tester.w = self.w
                         top_k = min(k_best_viterbi_labelings, NR_SENTENCE_LABELS ** document.count_sentences())
-                        viterbi_labelings = tester.viterbi_inference(test_document, top_k=top_k)
+                        viterbi_labelings = tester.viterbi_inference(
+                            test_document,
+                            infer_document_label=(self.config.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}),
+                            top_k=top_k,
+                            assign_best_labeling=False)
                         document_generated_labelings += viterbi_labelings
                         shuffle(document_generated_labelings)
                     assert(len(document_generated_labelings) >= 1)

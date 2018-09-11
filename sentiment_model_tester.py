@@ -54,7 +54,8 @@ class SentimentModelTester:
                 viterbi_results_per_document_label[document_label]['pi'] = cur_pi
                 if (bp is None and pi is None) or (cur_pi[-1].max() > pi[-1].max()):
                     bp, pi = cur_bp, cur_pi
-                    document.label = document_label
+                    if assign_best_labeling:
+                        document.label = document_label
 
             # Now we have the viterbi results (pi+bp) for each document label independently.
             # We want to find the k labelings with the highest scores.
