@@ -1,5 +1,5 @@
 from constants import *
-from utils import hash_file, multi_dicts_product_iterator
+from utils import hash_file
 
 
 class ConfigurationOptionPrinter:
@@ -189,20 +189,9 @@ class SentimentModelConfiguration:
                 for param_name, _type, default in cls.get_all_params()
                 if _type in {str, int, float, bool} and not isinstance(getattr(cls, param_name, None), property)]
 
-    def iterate_over_configurations(self, *args, **kwargs):
-        """
-            Input example:
-            iterate_over_configurations(
-                [ {'mira_k_random_labelings': 0, 'mira_k_best_viterbi_labelings': 10},
-                  {'mira_k_random_labelings': 10, 'mira_k_best_viterbi_labelings': 0} ],
-                [ {'model_type': [SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED], 'loss_type': 'plus'},
-                  {'model_type': [DOCUMENT_CLASSIFIER, STRUCTURED_JOINT], 'loss_type': ['plus', 'mult']} ],
-                mira_iterations = [3, 4, 5, 6],
-                min_nr_feature_occurrences = [2, 3, 4]
-            )
-        """
-        for values_dict in multi_dicts_product_iterator(*args, **kwargs):
+    def iterate_over_configurations(self, params_dicts):
+        for params_dict in params_dicts:
             config = self.clone()
-            for key, value in values_dict.items():
+            for key, value in params_dict.items():
                 setattr(config, key, value)
             yield config

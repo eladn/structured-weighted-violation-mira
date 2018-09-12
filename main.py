@@ -5,6 +5,7 @@ from sentiment_model import SentimentModel
 from sentiment_model_configuration import SentimentModelConfiguration
 from utils import print_title
 from constants import SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, DOCUMENT_CLASSIFIER, STRUCTURED_JOINT
+from dict_itertools import union, values_union, times
 
 import os
 from functools import partial
@@ -80,6 +81,31 @@ def perform_training(model_config: SentimentModelConfiguration, job_number: int=
     # model.save_model()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
 
 
+all_configurations_params = times(
+    union(
+        times(
+            model_type=values_union(SENTENCE_CLASSIFIER, DOCUMENT_CLASSIFIER),
+            mira_k_random_labelings=0,
+            mira_k_best_viterbi_labelings=values_union(1, 5, 10, 15)
+        ),
+        times(
+            union(
+                times(mira_k_random_labelings=values_union(0, 1, 2),
+                      mira_k_best_viterbi_labelings=values_union(1, 5, 10, 15)),
+                times(mira_k_random_labelings=values_union(1, 5, 10, 15),
+                      mira_k_best_viterbi_labelings=0)
+            ),
+            union(
+                times(model_type=SENTENCE_STRUCTURED, loss_type='plus'),
+                times(model_type=STRUCTURED_JOINT, loss_type=values_union('plus', 'mult', 'max'))
+            )
+        )
+    ),
+    mira_iterations=11,
+    min_nr_feature_occurrences=values_union(2, 3, 4, 5)
+)
+
+
 def train_multiple_configurations(NR_PROCESSES: int = 4):
     """
     Creates a processes pool, spawns all training jobs into the pool, wait for all jobs executions to finish.
@@ -110,14 +136,7 @@ def train_multiple_configurations(NR_PROCESSES: int = 4):
         print_jobs_progress()
 
     process_pool = Pool(NR_PROCESSES)
-    for cur_config in config.iterate_over_configurations(
-            [{'mira_k_random_labelings': 0, 'mira_k_best_viterbi_labelings': 10},
-             {'mira_k_random_labelings': 10, 'mira_k_best_viterbi_labelings': 0}],
-            [{'model_type': [SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED], 'loss_type': 'plus'},
-             {'model_type': [DOCUMENT_CLASSIFIER, STRUCTURED_JOINT], 'loss_type': ['plus', 'mult', 'max']}],
-            mira_iterations=7,
-            min_nr_feature_occurrences=[2, 3, 4]
-    ):
+    for cur_config in config.iterate_over_configurations(all_configurations_params):
         print('Spawning training job for model params: ' + cur_config.to_string(separator=', '))
         jobs_status['total_nr_jobs'] += 1
         process_pool.apply_async(
@@ -136,21 +155,7 @@ def train_multiple_configurations(NR_PROCESSES: int = 4):
             print(conf)
 
 
-def main():
-    # train_multiple_configurations()
-    # exit(0)
-
-    # config = SentimentModelConfiguration()
-    # perform_training(config)
-    # exit(0)
-
-    class ExecutionParams:
-        perform_train = False
-        evaluate_over_train_set = True
-        evaluate_over_test_set = True
-
-    execution_params = ExecutionParams()
-
+def train_and_eval_single_configuration(execution_params):
     model_config = SentimentModelConfiguration()
     print('Model name: ' + model_config.model_name)
     dataset = load_dataset(model_config)
@@ -160,8 +165,8 @@ def main():
     if execution_params.perform_train:
         trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, model_config)
         trainer.evaluate_feature_vectors()
-        model = trainer.fit_using_mira_algorithm()  # save_model_after_every_iteration=True
-        model.save()
+        model = trainer.fit_using_mira_algorithm(save_model_after_every_iteration=True)
+        # model.save()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
 
     evaluation_datasets = []
     if execution_params.evaluate_over_train_set:
@@ -184,6 +189,23 @@ def main():
         # model.print_results_to_file(tagged_test_set, model_name, is_test=True)
         model.confusion_matrix(inferred_dataset, evaluation_set_ground_truth)
         # model.confusion_matrix_ten_max_errors(model_name, is_test=True)
+
+
+def main():
+    # train_multiple_configurations()
+    # exit(0)
+
+    # config = SentimentModelConfiguration()
+    # perform_training(config)
+    # exit(0)
+
+    class ExecutionParams:
+        perform_train = True
+        evaluate_over_train_set = True
+        evaluate_over_test_set = True
+
+    execution_params = ExecutionParams()
+    train_and_eval_single_configuration(execution_params)
 
 
 if __name__ == "__main__":
