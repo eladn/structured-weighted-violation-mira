@@ -83,8 +83,7 @@ class SentimentModelTrainer:
                     document_generated_labelings = []
                     if self.model_config.mira_k_random_labelings > 0:
                         document_generated_labelings = self.extract_random_labeling_subset(
-                            document, self.model_config.mira_k_random_labelings,
-                            use_document_tag=self.model_config.infer_document_label)
+                            document, self.model_config.mira_k_random_labelings)
                     if self.model_config.mira_k_best_viterbi_labelings > 0:
                         top_k = min(self.model_config.mira_k_best_viterbi_labelings, NR_SENTENCE_LABELS ** document.count_sentences())
                         viterbi_labelings = model.viterbi_inference(
@@ -172,8 +171,8 @@ class SentimentModelTrainer:
         h = np.array(h).reshape(-1, )
         return M, q.reshape(self.features_extractor.nr_features, ), G, h
 
-    @staticmethod
-    def extract_random_labeling_subset(document: Document, k: int, use_document_tag: bool=False):
+    def extract_random_labeling_subset(self, document: Document, k: int):
+        use_document_tag = not self.model_config.infer_document_label
         return [
             [document.label if use_document_tag else random.choice(DOCUMENT_LABELS)] +
             [random.choice(SENTENCE_LABELS) for _ in range(document.count_sentences())]
