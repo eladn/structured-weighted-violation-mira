@@ -48,14 +48,14 @@ class SentimentModel:
 
         # Forward pass: calculate `pi` and `bp`.
         bp, pi = None, None
-        viterbi_results_per_document_label = {document_label: {'bp': None, 'pi': None}
-                                              for document_label in DOCUMENT_LABELS}
+        viterbi_forward_pass_results_per_document_label = \
+            {document_label: {'bp': None, 'pi': None} for document_label in DOCUMENT_LABELS}
         bp_for_multi_document_labels = {}
         if infer_document_label:
             for document_label in DOCUMENT_LABELS:
                 cur_bp, cur_pi = self.viterbi_forward_pass(document, document_label=document_label, top_k=top_k)
-                viterbi_results_per_document_label[document_label]['bp'] = cur_bp
-                viterbi_results_per_document_label[document_label]['pi'] = cur_pi
+                viterbi_forward_pass_results_per_document_label[document_label]['bp'] = cur_bp
+                viterbi_forward_pass_results_per_document_label[document_label]['pi'] = cur_pi
                 if (bp is None and pi is None) or (cur_pi[-1].max() > pi[-1].max()):
                     bp, pi = cur_bp, cur_pi
                     if assign_best_labeling:
@@ -75,7 +75,7 @@ class SentimentModel:
             total_scores_per_document_label_and_rank = np.zeros((NR_DOCUMENT_LABELS, top_k))
             for document_label_idx, document_label in enumerate(DOCUMENT_LABELS):
                 total_scores_per_document_label_and_rank[document_label_idx, :] = \
-                    viterbi_results_per_document_label[document_label]['pi'][-1, 0, :]
+                    viterbi_forward_pass_results_per_document_label[document_label]['pi'][-1, 0, :]
 
             # Find indeces (and values) of top_k elements with highest score in the above created matrix.
             # Notice: Out of (NR_DOCUMENT_LABELS * top_k) elements we find and sort the best top_k elements
@@ -90,53 +90,66 @@ class SentimentModel:
 
         # Backward pass: Assign the top_k sentence labelings (with highest scores) using calculated scores
         # array `pi` and back-pointers array `bp`.
-
         all_labelings = []
 
         # If we have to infer document label, infer top_k labelings for each possible document label;
         # otherwise, run the inference just once for `document.label`.
-        for cur_document_label in (DOCUMENT_LABELS if infer_document_label and infer_top_k_per_each_document_label else [document.label]):
-            # Initialize top_k labelings, each containing the document label and `None`s for sentences labels.
-            labelings = [[document.label] + [None for _ in document.sentences] for _ in range(top_k)]
-
+        document_labels_to_iterate_over = DOCUMENT_LABELS if infer_document_label and infer_top_k_per_each_document_label else [document.label]
+        for cur_document_label in document_labels_to_iterate_over:
             # For each rank, trace back (using the back-pointers) the labeling that yields the k-th highest score.
             for rank in range(top_k):
-
-                following_sentence_label_idx = 0
+                rank_to_use_in_bp = rank
                 if infer_document_label:
                     if infer_top_k_per_each_document_label:
-                        sentence_rank = rank
                         document_label = cur_document_label
                     else:
-                        sentence_rank = bp_for_multi_document_labels['rank_idxs'][rank]
+                        # Get the `rank`-th highest labeling out of both viterbi-forward-pass results.
+                        rank_to_use_in_bp = bp_for_multi_document_labels['rank_idxs'][rank]
                         document_label = DOCUMENT_LABELS[bp_for_multi_document_labels['document_label_idxs'][rank]]
-                    labelings[rank][0] = document_label
-                    bp = viterbi_results_per_document_label[document_label]['bp']
+                    bp = viterbi_forward_pass_results_per_document_label[document_label]['bp']
                 else:
-                    sentence_rank = rank
+                    document_label = document.label
 
-                for sentence_idx in range(nr_sentences - 1, -1, -1):
-                    # We use the back-pointers of following sentence #(sentence_idx+1) for tracing back the label&rank
-                    # of the sentence #sentence_idx.
-                    # Note that it is ok to access the cells at #(last_sentence_idx+1), because we made sure to
-                    # calculate it during the forward pass. It helps us finding the starting of the tracing of the k-th
-                    # best labeling.
-                    following_sentence_idx = sentence_idx + 1
-                    sentence_label_idx = bp[following_sentence_idx, following_sentence_label_idx, sentence_rank, 0]
-                    sentence_rank = bp[following_sentence_idx, following_sentence_label_idx, sentence_rank, 1]
-                    labelings[rank][sentence_idx+1] = SENTENCE_LABELS[sentence_label_idx]
-                    if rank == 0 and assign_best_labeling:
-                        document.sentences[sentence_idx].label = SENTENCE_LABELS[sentence_label_idx]
-                    following_sentence_label_idx = sentence_label_idx
-
-                # The first sentence is assigned (by the forward pass) with -inf scores for each rank>0 (explained in
-                #   the implementation of the forward pass method).
-                # Hence any labeling path is expected to track back to rank=0 for the first sentence.
-                assert(sentence_rank == 0)
-
-            all_labelings += labelings
+                labeling = self.extract_labeling_from_viterbi_forward_pass_results(
+                    document, document_label, bp, rank_to_use_in_bp, (rank == 0 and assign_best_labeling))
+                all_labelings.append(labeling)
 
         return all_labelings
+
+    def extract_labeling_from_viterbi_forward_pass_results(self, document: Document,
+                                                           document_label,
+                                                           bp: np.ndarray,
+                                                           rank_idx: int = 0,
+                                                           assign_labeling_to_document: bool = False):
+        assert(rank_idx <= bp.shape[2])
+
+        # The first cell (`1+`) is for the document label.
+        labeling = [None] * (1 + document.count_sentences())
+        labeling[0] = document_label
+
+        sentence_rank_idx = rank_idx
+        following_sentence_label_idx = 0
+        for sentence_idx in range(document.count_sentences() - 1, -1, -1):
+            # We use the back-pointers of following sentence #(sentence_idx+1) for tracing back the label&rank
+            # of the sentence #sentence_idx.
+            # Note that it is ok to access the cells at #(last_sentence_idx+1), because we made sure to
+            # calculate it during the forward pass. It helps us finding the starting of the tracing of the k-th
+            # best labeling.
+            following_sentence_idx = sentence_idx + 1
+            sentence_label_idx = bp[following_sentence_idx, following_sentence_label_idx, sentence_rank_idx, 0]
+            sentence_rank_idx = bp[following_sentence_idx, following_sentence_label_idx, sentence_rank_idx, 1]
+            labeling[sentence_idx + 1] = SENTENCE_LABELS[sentence_label_idx]
+            following_sentence_label_idx = sentence_label_idx
+
+        # The first sentence is assigned (by the forward pass) with -inf scores for each rank>0 (explained in
+        #   the implementation of the forward pass method).
+        # Hence any labeling path is expected to track back to rank=0 for the first sentence.
+        assert (sentence_rank_idx == 0)
+
+        if assign_labeling_to_document:
+            document.assign_labeling(labeling)
+
+        return labeling
 
     def viterbi_forward_pass(self, document: Document, document_label=None, top_k: int=1):
         assert document_label is None or document_label in DOCUMENT_LABELS
