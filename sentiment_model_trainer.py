@@ -49,7 +49,8 @@ class SentimentModelTrainer:
         pb.finish()
         print("evaluate_feature_vectors done: {0:.3f} seconds".format(time.time() - start_time))
 
-    def fit_using_mira_algorithm(self, save_model_after_every_iteration: bool = False):
+    def fit_using_mira_algorithm(self, save_model_after_every_iteration: bool = False,
+                                 datasets_to_evaluate_after_every_iteration: list = False):
         optimization_time = time.time()
         print_title("Training model: {model}, k-best-viterbi = {k_viterbi}, k-random = {k_rnd}, iterations = {iter}".format(
             model=self.model_config.model_type,
@@ -67,6 +68,7 @@ class SentimentModelTrainer:
                                                           test_corpus.documents,
                                                           self.evaluated_feature_vectors,
                                                           batch_size=self.model_config.mira_batch_size), start=1):
+                flg_infer_top_k_per_each_document_label = self.model_config.infer_document_label and (2 * cur_iter < self.model_config.mira_iterations)
                 task_str = 'iter: {cur_iter}/{nr_iters} -- document: {cur_doc}/{nr_docs}'.format(
                     cur_iter=cur_iter,
                     nr_iters=self.model_config.mira_iterations,
@@ -89,7 +91,8 @@ class SentimentModelTrainer:
                             test_document,
                             infer_document_label=self.model_config.infer_document_label,
                             top_k=top_k,
-                            assign_best_labeling=False)
+                            assign_best_labeling=False,
+                            infer_top_k_per_each_document_label=flg_infer_top_k_per_each_document_label)
                         document_generated_labelings += viterbi_labelings
                         shuffle(document_generated_labelings)
                     assert(len(document_generated_labelings) >= 1)
@@ -108,6 +111,17 @@ class SentimentModelTrainer:
                 cnf = self.model_config.clone()
                 cnf.mira_iterations = cur_iter
                 model.save(cnf.model_weights_filename)
+
+            if len(datasets_to_evaluate_after_every_iteration) > 0:
+                print()
+                for evaluation_dataset_name, evaluation_dataset in datasets_to_evaluate_after_every_iteration:
+                    print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
+
+                    inferred_dataset = evaluation_dataset.clone(copy_labels=False)
+                    model.inference(inferred_dataset)
+
+                    evaluation_set_ground_truth = evaluation_dataset.clone()
+                    print(model.evaluate_model(inferred_dataset, evaluation_set_ground_truth))
         pb.finish()
         print("MIRA training completed. Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
         return model

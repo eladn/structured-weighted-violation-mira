@@ -162,18 +162,20 @@ def train_and_eval_single_configuration(execution_params):
     features_extractor = CorpusFeaturesExtractor.load_or_create(model_config, dataset.train)
     model = None
 
-    if execution_params.perform_train:
-        trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, model_config)
-        trainer.evaluate_feature_vectors()
-        model = trainer.fit_using_mira_algorithm(save_model_after_every_iteration=True)
-        # model.save()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
-
     evaluation_datasets = []
     if execution_params.evaluate_over_train_set:
         evaluation_datasets.append(('train', dataset.train))
     if execution_params.evaluate_over_test_set:
         evaluation_datasets.append(('test', dataset.test))
         features_extractor.initialize_corpus_features(dataset.test)
+
+    if execution_params.perform_train:
+        trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, model_config)
+        trainer.evaluate_feature_vectors()
+        model = trainer.fit_using_mira_algorithm(
+            save_model_after_every_iteration=True,
+            datasets_to_evaluate_after_every_iteration=evaluation_datasets)
+        # model.save()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
 
     for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
         print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
