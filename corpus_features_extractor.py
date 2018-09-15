@@ -260,7 +260,8 @@ class CorpusFeaturesExtractor:
         self._features_idxs = None
 
     @staticmethod
-    def load_or_create(model_config: SentimentModelConfiguration, train_corpus: Corpus):
+    def load_or_create(model_config: SentimentModelConfiguration, train_corpus: Corpus,
+                       save_to_file_if_create: bool = False):
         if False and os.path.isfile(FEATURES_EXTRACTORS_PATH + model_config.train_corpus_features_extractor_filename):
             with open(FEATURES_EXTRACTORS_PATH + model_config.train_corpus_features_extractor_filename, 'rb') as f:
                 features_extractor = pickle.load(f)
@@ -268,8 +269,9 @@ class CorpusFeaturesExtractor:
         else:
             features_extractor = CorpusFeaturesExtractor(model_config)
             features_extractor.generate_features_from_corpus(train_corpus)
-            with open(FEATURES_EXTRACTORS_PATH + model_config.train_corpus_features_extractor_filename, 'wb') as f:
-                pickle.dump(features_extractor, f)
+            if save_to_file_if_create:
+                with open(FEATURES_EXTRACTORS_PATH + model_config.train_corpus_features_extractor_filename, 'wb') as f:
+                    pickle.dump(features_extractor, f)
         return features_extractor
 
     @property
