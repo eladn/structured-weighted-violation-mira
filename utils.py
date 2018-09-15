@@ -134,3 +134,57 @@ def shuffle_iterate_over_batches(*arrays, batch_size: int = None, shuffle: bool 
         batch = (array[indeces] if isinstance(array, np.ndarray) else list(array[idx] for idx in indeces)
                  for array in arrays)
         yield (batch_start_idx,) + tuple(batch)
+
+
+class AttributePrinter:
+    def __init__(self,
+                 attribute: str=None,
+                 name: str=None,
+                 description: str=None,
+                 value_type=None,
+                 print_condition=None,
+                 print_iff_not_none: bool=False,
+                 print_iff_true: bool=False,
+                 print_value_format_str=None,
+                 print_value_function=None,
+                 name_value_separator: str=None):
+
+        if print_value_format_str is not None and print_value_function is not None:
+            raise RuntimeError(
+                'ConfigurationOption constructor: Cannot specify both `print_value_format_str` and `print_value_function`.')
+        if bool(print_condition is not None) + bool(print_iff_not_none) + bool(print_iff_true) > 1:
+            raise RuntimeError(
+                'ConfigurationOption constructor: Cannot specify more than one of: `print_condition`, `print_iff_not_none` and `print_iff_true`.')
+        if attribute is None and print_value_function is None:
+            raise RuntimeError(
+                'ConfigurationOption constructor: Cannot specify neither `attribute` nor `print_value_function`.')
+
+        self.name_value_separator = str(name_value_separator) if name_value_separator is not None else '='
+        self.attribute = attribute
+        self.name = name
+        self.description = description
+        self.value_type = value_type
+        self.print_condition = print_condition
+        self.print_iff_not_none = print_iff_not_none
+        self.print_iff_true = print_iff_true
+        self.print_value_format_str = print_value_format_str
+        self.print_value_function = print_value_function
+
+    def print(self, obj):
+        if self.attribute and not hasattr(obj, self.attribute):
+            return ''
+        value = getattr(obj, self.attribute) if isinstance(self.attribute, str) else None
+        if self.print_iff_not_none and value is None:
+            return ''
+        if self.print_iff_true and not value:
+            return ''
+        if self.print_condition is not None and not self.print_condition(value, obj):
+            return ''
+        name_and_separator = (str(self.name) + self.name_value_separator) if self.name else ''
+        if self.print_value_function is not None:
+            return name_and_separator + self.print_value_function(value, obj)
+        print_fmt = '{}'
+        if self.print_value_format_str is not None:
+            print_fmt = '{' + str(self.print_value_format_str) + '}'
+        printed_value = print_fmt.format(value)
+        return name_and_separator + printed_value
