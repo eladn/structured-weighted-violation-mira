@@ -5,6 +5,12 @@ from utils import ProgressBar
 
 import numpy as np
 
+# NOTICE:
+# This is the old implementation. It is currently NOT USED anymore.
+# One can see the new implementation under `CorpusFeaturesExtractor`.
+# See comment about the inefficiently of this implementation under
+# the method `evaluate_clique_feature_vector()` in this file.
+
 
 class FeatureVector:
     def __init__(self, corpus):
@@ -237,6 +243,18 @@ class FeatureVector:
             tag = token.tag
             # feature_arguments = [tag, (pre_tag, tag), (pre_pre_tag, pre_tag, tag)]
             #
+
+            # NOTICE:
+            #   It may be not efficient to re-create the following feature-arguments for each evaluation call.
+            #   Note that these arguments do not change for a token nor for a sentence while the execution
+            #   of the training, because they are not dependent on the labeling at all.
+            #   Hence, in the new `CorpusFeaturesExtractor` we calculate only once the indexes of the feature
+            #   arguments of each sentence, and store it under the sentence itself, instead of re-creating these.
+            #   For each sentence we also calculate (and store) the feature indexes that match its feature arguments
+            #   and with every possible labeling context.
+            #   In that way, the feature-vector evaluation for a given sentence is just a vector concatenation, which
+            #   is much efficient than what we do here.
+
             feature_arguments = [(token.word, tag), tag, (pre_word, pre_tag, token.word, tag),
                                  (pre_tag, token.word, tag), (pre_word, pre_tag, tag), (pre_tag, tag),
                                  (pre_pre_word, pre_pre_tag, pre_word, pre_tag, token.word, tag),
