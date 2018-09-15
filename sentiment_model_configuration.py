@@ -21,6 +21,8 @@ class SentimentModelConfiguration:
     # model_type = STRUCTURED_JOINT
     model_type = SENTENCE_STRUCTURED
 
+    feature_extractor_random_state_seed = 0
+
     @property
     def pos_docs_train_filename(self):
         return 'pos-' + self.docs_train_filename_base_wo_ext + '.txt'

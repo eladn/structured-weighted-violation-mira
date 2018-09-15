@@ -258,6 +258,7 @@ class CorpusFeaturesExtractor:
         self._nr_features = 0
         self._feature_groups_types = []
         self._features_idxs = None
+        self.random_state = np.random.RandomState(seed=self._model_config.feature_extractor_random_state_seed)
 
     @staticmethod
     def load_or_create(model_config: SentimentModelConfiguration, train_corpus: Corpus,
@@ -336,7 +337,7 @@ class CorpusFeaturesExtractor:
             self._fa_in_fg_mask = self._fa_in_fg_mask & (self.fa_in_fg_count >= self._model_config.min_nr_feature_occurrences)
 
         # dilution - method 2: randomly choosing a ratio of the features.
-        # rnd = np.random.rand(*self.fa_in_fg_mask.shape) < self.config.features_dilution_ratio
+        # rnd = self.random_state.rand(*self.fa_in_fg_mask.shape) < self.config.features_dilution_ratio
         # self.fa_in_fg_mask &= rnd
 
         # dilution - method 3: sampling `nr_features` features from the discrete distribution
@@ -346,7 +347,7 @@ class CorpusFeaturesExtractor:
         #
         #     p = self.fa_in_fg_count[self.fa_in_fg_mask]
         #     p /= p.sum()
-        #     indeces_of_features_to_keep = np.random.choice(
+        #     indeces_of_features_to_keep = self.random_state.choice(
         #         self.nr_all_features, self.config.nr_features, replace=False, p=p)
         #     features_to_keep_flattened_mask = np.zeros((self.nr_all_features, ), dtype=bool)
         #     features_to_keep_flattened_mask[indeces_of_features_to_keep] = True
