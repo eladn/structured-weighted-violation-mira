@@ -42,12 +42,14 @@ class SentimentModel:
     # Otherwise, all possible document labels will be tested, and the one with
     # the maximal total document score will be assigned to `document.label`.
     def viterbi_inference(self, document: Document, infer_document_label: bool = True, top_k: int = 1,
-                          assign_best_labeling: bool = True, infer_top_k_per_each_document_label: bool = True):
+                          assign_best_labeling: bool = True, infer_top_k_per_each_document_label: bool = False):
+        assert(not infer_top_k_per_each_document_label or infer_document_label)
         nr_sentences = document.count_sentences()
         assert(NR_SENTENCE_LABELS ** nr_sentences >= top_k)
 
         # Forward pass: calculate `pi` and `bp`.
         bp, pi = None, None
+        best_document_label = None
         viterbi_forward_pass_results_per_document_label = \
             {document_label: {'bp': None, 'pi': None} for document_label in DOCUMENT_LABELS}
         bp_for_multi_document_labels = {}
@@ -58,8 +60,7 @@ class SentimentModel:
                 viterbi_forward_pass_results_per_document_label[document_label]['pi'] = cur_pi
                 if (bp is None and pi is None) or (cur_pi[-1].max() > pi[-1].max()):
                     bp, pi = cur_bp, cur_pi
-                    if assign_best_labeling:
-                        document.label = document_label
+                    best_document_label = document_label
 
             # Now we have the viterbi results (pi+bp) for each document label independently.
             # We want to find the k labelings with the highest scores.
@@ -110,8 +111,10 @@ class SentimentModel:
                 else:
                     document_label = document.label
 
+                assign_labeling = (rank == 0 and assign_best_labeling) and \
+                                  (not infer_top_k_per_each_document_label or best_document_label == document_label)
                 labeling = self.extract_labeling_from_viterbi_forward_pass_results(
-                    document, document_label, bp, rank_to_use_in_bp, (rank == 0 and assign_best_labeling))
+                    document, document_label, bp, rank_to_use_in_bp, assign_labeling)
                 all_labelings.append(labeling)
 
         return all_labelings
@@ -258,7 +261,9 @@ class SentimentModel:
             for i, document in enumerate(corpus.documents):
                 pb.start_next_task()
                 self.viterbi_inference(
-                    document, infer_document_label=(self.model_config.model_type == STRUCTURED_JOINT))
+                    document,
+                    infer_document_label=(self.model_config.model_type == STRUCTURED_JOINT),
+                    infer_top_k_per_each_document_label=False)
             pb.finish()
 
         print("Inference done: {0:.3f} seconds".format(time.time() - start_time))
