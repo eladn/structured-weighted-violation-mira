@@ -217,8 +217,8 @@ class SentimentModel:
         return bp, pi
 
     def document_predict(self, corpus: Corpus):
-        best_document_score = None
         for document in corpus.documents:
+            best_document_score = None
             for document_label in DOCUMENT_LABELS:
                 sum_document_score = 0
                 for sentence in document.sentences:
@@ -273,6 +273,7 @@ class SentimentModel:
                 "errors": 0
             }
             for (_, sentence_inferred), (_, sentence_ground_truth) in zip(inferred_corpus, ground_truth_corpus):
+                assert (sentence_inferred.label in SENTENCE_LABELS and sentence_ground_truth.label in SENTENCE_LABELS)
                 if sentence_inferred.label == sentence_ground_truth.label:
                     sentences_results["correct"] += 1
                 else:
@@ -285,6 +286,7 @@ class SentimentModel:
                 "errors": 0
             }
             for document_inferred, document_ground_truth in zip(inferred_corpus.documents, ground_truth_corpus.documents):
+                assert (document_inferred.label in DOCUMENT_LABELS and document_ground_truth.label in DOCUMENT_LABELS)
                 if document_inferred.label == document_ground_truth.label:
                     documents_results["correct"] += 1
                 else:
