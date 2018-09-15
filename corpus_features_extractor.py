@@ -454,15 +454,15 @@ class CorpusFeaturesExtractor:
         return np.concatenate(fv)
 
     def evaluate_document_feature_vector(self, document: Document, y_tag=None):
-        # TODO if not structured - should not count from 1
+        start_from_sentence_idx = 1 if self._model_config.use_pre_sentence else 0
+        nr_sentences = document.count_sentences() - start_from_sentence_idx
         y_document = y_tag[0] if y_tag is not None else None
         row_ind, col_ind = [], []
-        for sentence in islice(document.sentences, 1, None):  # TODO
+        for sentence in islice(document.sentences, start_from_sentence_idx, None):
             y_sentence = y_tag[sentence.index + 1] if y_tag is not None else None
             y_pre_sentence = y_tag[sentence.index] if y_tag is not None else None
             feature_indices = self.evaluate_clique_feature_vector(
                 document, sentence, y_document, y_sentence, y_pre_sentence)
             col_ind += list(feature_indices)  # TODO: consider stacking it all in array (size can be known)
             row_ind += [sentence.index - 1 for _ in feature_indices]
-        return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)),
-                          shape=(document.count_sentences() - 1, self.nr_features))  # TODO
+        return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)), shape=(nr_sentences, self.nr_features))
