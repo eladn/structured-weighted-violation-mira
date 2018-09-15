@@ -97,7 +97,12 @@ all_configurations_params = times(
             ),
             union(
                 times(model_type=SENTENCE_STRUCTURED, loss_type='plus'),
-                times(model_type=STRUCTURED_JOINT, loss_type=values_union('plus', 'mult', 'max'))
+                times(
+                      union(
+                          times(loss_type='plus', doc_loss_factor=values_union(0.2, 0.5, 1, 1.3, 2)),
+                          times(loss_type=values_union('mult', 'max'))
+                      ), model_type=STRUCTURED_JOINT
+                )
             )
         )
     ),
