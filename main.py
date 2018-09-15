@@ -183,7 +183,7 @@ def train_and_eval_single_configuration(execution_params):
         if model is None:
             model = SentimentModel.load(model_config, features_extractor)
 
-        inferred_dataset = evaluation_dataset.clone(copy_labels=False)
+        inferred_dataset = evaluation_dataset.clone(copy_document_labels=False, copy_sentence_labels=False)
         model.inference(inferred_dataset)
 
         evaluation_set_ground_truth = evaluation_dataset.clone()

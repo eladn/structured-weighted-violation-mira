@@ -10,11 +10,11 @@ class Corpus:
         self.documents = []
         self.name = '' if name is None else str(name)
 
-    def clone(self, copy_labels: bool = True):
+    def clone(self, copy_document_labels: bool = True, copy_sentence_labels: bool = True):
         print('Cloning corpus ...', end='')
         new_corpus_name = self.name + ' [Clone]' if self.name else ''
         new_corpus = Corpus(new_corpus_name)
-        new_corpus.documents = [doc.clone(copy_labels) for doc in self.documents]
+        new_corpus.documents = [doc.clone(copy_document_labels, copy_sentence_labels) for doc in self.documents]
         print(' Done.')
         return new_corpus
 

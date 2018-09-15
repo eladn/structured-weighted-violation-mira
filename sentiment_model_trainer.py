@@ -12,7 +12,7 @@ from warnings import warn
 import sys
 
 from constants import STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, \
-    DOCUMENT_LABELS, SENTENCE_LABELS, TEST_PATH, NR_SENTENCE_LABELS
+    DOCUMENT_LABELS, SENTENCE_LABELS, NR_SENTENCE_LABELS
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
@@ -59,13 +59,13 @@ class SentimentModelTrainer:
             iter=self.model_config.mira_iterations))
         nr_batchs_per_iteration = int(np.ceil(len(self.train_corpus.documents) / self.model_config.mira_batch_size))
         pb = ProgressBar(self.model_config.mira_iterations * nr_batchs_per_iteration)
-        test_corpus = self.train_corpus.clone(copy_labels=False)
+        corpus_without_labels = self.train_corpus.clone(copy_document_labels=False, copy_sentence_labels=False)
         initial_weights = np.zeros(self.features_extractor.nr_features)
         model = SentimentModel(self.features_extractor, self.model_config, initial_weights)
         for cur_iter in range(1, self.model_config.mira_iterations+1):
             for document_nr, (batch_start_idx, documents_batch, test_documents_batch, feature_vectors_batch) \
                 in enumerate(shuffle_iterate_over_batches(self.train_corpus.documents,
-                                                          test_corpus.documents,
+                                                          corpus_without_labels.documents,
                                                           self.evaluated_feature_vectors,
                                                           batch_size=self.model_config.mira_batch_size), start=1):
                 flg_infer_top_k_per_each_document_label = self.model_config.infer_document_label and (2 * cur_iter < self.model_config.mira_iterations)
@@ -117,7 +117,8 @@ class SentimentModelTrainer:
                 for evaluation_dataset_name, evaluation_dataset in datasets_to_evaluate_after_every_iteration:
                     print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
 
-                    inferred_dataset = evaluation_dataset.clone(copy_labels=False)
+                    inferred_dataset = evaluation_dataset.clone(
+                        copy_document_labels=False, copy_sentence_labels=False)
                     model.inference(inferred_dataset)
 
                     evaluation_set_ground_truth = evaluation_dataset.clone()
