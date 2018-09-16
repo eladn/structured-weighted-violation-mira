@@ -85,8 +85,8 @@ all_configurations_params = times(
     union(
         times(
             model_type=values_union(SENTENCE_CLASSIFIER, DOCUMENT_CLASSIFIER),
-            mira_k_random_labelings=0,
-            mira_k_best_viterbi_labelings=values_union(1, 5, 10, 15)
+            mira_k_best_viterbi_labelings=0,
+            mira_k_random_labelings=values_union(1, 5, 10, 15)
         ),
         times(
             union(
