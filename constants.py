@@ -1,3 +1,5 @@
+import os
+
 DEBUG = True
 
 DOCUMENT_LABELS = [-1, 1]
@@ -12,14 +14,15 @@ SENTENCE_STRUCTURED = "sentence-structured"
 MODELS = (STRUCTURED_JOINT, DOCUMENT_CLASSIFIER,
           SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED)
 
-DATA_PATH = "./data/"
-MODELS_PATH = "./models/"
-FEATURES_EXTRACTORS_PATH = "./features_extractors/"
+PATH = os.path.dirname(os.path.realpath(__file__))
+DATA_PATH = PATH + "/data/"
+MODELS_PATH = PATH + "/models/"
+FEATURES_EXTRACTORS_PATH = PATH + "/features_extractors/"
 # BASIC_MODELS_PATH = MODELS_PATH + "basic/"
 # ADVANCED_MODELS_PATH = MODELS_PATH + "advanced/"
-TEST_PATH = "./test/"
+TEST_PATH = PATH + "/test/"
 # BASIC_TEST_PATH = TEST_PATH + "basic/"
 # ADVANCED_TEST_PATH = TEST_PATH + "advanced/"
-# COMP_PATH = "./comp/"
+# COMP_PATH = PATH + "/comp/"
 # BASIC_COMP_PATH = COMP_PATH + "basic/"
 # ADVANCED_COMP_PATH = COMP_PATH + "advanced/"

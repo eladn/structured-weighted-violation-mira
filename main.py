@@ -1,4 +1,3 @@
-from corpus import Corpus
 from corpus_features_extractor import CorpusFeaturesExtractor
 from sentiment_model_trainer import SentimentModelTrainer
 from sentiment_model import SentimentModel
@@ -6,60 +5,21 @@ from sentiment_model_configuration import SentimentModelConfiguration
 from utils import print_title
 from constants import SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, DOCUMENT_CLASSIFIER, STRUCTURED_JOINT
 from dict_itertools import union, values_union, times
+from dataset import load_dataset
 
 import sys
 import os
 from functools import partial
-from collections import namedtuple
 
 
-def data_exploration(train_set, test_set, comp_set):
-    train_set_count_sentences = train_set.count_sentences()
-    train_set_count_tokens = train_set.count_tokens()
-    train_set_average_tokens_per_sentence = train_set_count_tokens / train_set_count_sentences
-
-    test_set_count_sentences = test_set.count_sentences()
-    test_set_count_tokens = test_set.count_tokens()
-    test_set_average_tokens_per_sentence = test_set_count_tokens / test_set_count_sentences
-
-    comp_set_count_sentences = comp_set.count_sentences()
-    comp_set_count_tokens = comp_set.count_tokens()
-    comp_set_average_tokens_per_sentence = comp_set_count_tokens / comp_set_count_sentences
-
-    print("Train")
-    print("---------------")
-    print("{} sentences".format(train_set_count_sentences))
-    print("{} tokens".format(train_set_count_tokens))
-    print("{} average tokens per sentence".format(train_set_average_tokens_per_sentence))
-    print()
-    print("Test")
-    print("---------------")
-    print("{} sentences".format(test_set_count_sentences))
-    print("{} tokens".format(test_set_count_tokens))
-    print("{} average tokens per sentence".format(test_set_average_tokens_per_sentence))
-    print()
-    print("Comp")
-    print("---------------")
-    print("{} sentences".format(comp_set_count_sentences))
-    print("{} tokens".format(comp_set_count_tokens))
-    print("{} average tokens per sentence".format(comp_set_average_tokens_per_sentence))
-    print()
+class JobExecutionParams:
+    perform_train = True
+    evaluate_over_train_set = True
+    evaluate_over_test_set = True
+    evaluate_after_every_iteration = True
 
 
-Dataset = namedtuple("Dataset", ["train", "test"])
-
-
-def load_dataset(config: SentimentModelConfiguration):
-    train_set = Corpus('train')
-    train_set.load_file(config.pos_docs_train_filename, documents_label=1, insert_sentence_labels=True)
-    train_set.load_file(config.neg_docs_train_filename, documents_label=-1, insert_sentence_labels=True)
-    test_set = Corpus('test')
-    test_set.load_file(config.pos_docs_test_filename, documents_label=1, insert_sentence_labels=True)
-    test_set.load_file(config.neg_docs_test_filename, documents_label=-1, insert_sentence_labels=True)
-    return Dataset(train=train_set, test=test_set)
-
-
-# def dummy_job(config: SentimentModelConfiguration, job_number: int):
+# def dummy_job(config: SentimentModelConfiguration, job_execution_params: JobExecutionParams, job_number: int):
     # if job_number % 10 == 0:
     #     raise ValueError('asdf')
     # import time
@@ -67,7 +27,9 @@ def load_dataset(config: SentimentModelConfiguration):
     # return
 
 
-def perform_training(model_config: SentimentModelConfiguration, job_number: int=None):
+def train_and_eval_single_configuration(model_config: SentimentModelConfiguration,
+                                        job_execution_params: JobExecutionParams,
+                                        job_number: int=None):
     if job_number is not None:
         # TODO: add current time in output log filename.
         output_log_fd = os.open(
@@ -75,12 +37,40 @@ def perform_training(model_config: SentimentModelConfiguration, job_number: int=
         os.dup2(output_log_fd, sys.stdout.fileno())
         os.dup2(output_log_fd, sys.stderr.fileno())
 
-    print('Model name: ' + model_config.to_string(', '))
+    print('Model name: ' + model_config.model_name)
     dataset = load_dataset(model_config)
     features_extractor = CorpusFeaturesExtractor.load_or_create(model_config, dataset.train)
-    trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, model_config)
-    model = trainer.fit_using_mira_algorithm(save_model_after_every_iteration=True)
-    # model.save_model()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
+    model = None
+
+    evaluation_datasets = []
+    if job_execution_params.evaluate_over_train_set:
+        evaluation_datasets.append(('train', dataset.train))
+    if job_execution_params.evaluate_over_test_set:
+        evaluation_datasets.append(('test', dataset.test))
+        features_extractor.initialize_corpus_features(dataset.test)
+    evaluation_datasets__after_every_iteration = evaluation_datasets if job_execution_params.evaluate_after_every_iteration else None
+
+    if job_execution_params.perform_train:
+        trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, model_config)
+        model = trainer.fit_using_mira_algorithm(
+            save_model_after_every_iteration=True,
+            datasets_to_evaluate_after_every_iteration=evaluation_datasets__after_every_iteration)
+        # model.save()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
+
+    for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
+        print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
+
+        if model is None:
+            model = SentimentModel.load(model_config, features_extractor)
+
+        inferred_dataset = evaluation_dataset.clone(copy_document_labels=False, copy_sentence_labels=False)
+        model.inference(inferred_dataset)
+
+        evaluation_set_ground_truth = evaluation_dataset.clone()
+        print(model.evaluate_model(inferred_dataset, evaluation_set_ground_truth))
+        # model.print_results_to_file(tagged_test_set, model_name, is_test=True)
+        model.confusion_matrix(inferred_dataset, evaluation_set_ground_truth)
+        # model.confusion_matrix_ten_max_errors(model_name, is_test=True)
 
 
 all_configurations_params = times(
@@ -142,12 +132,18 @@ def train_multiple_configurations(NR_PROCESSES: int = 4):
         jobs_status['nr_failed_jobs'] += 1
         print_jobs_progress()
 
+    job_execution_params = JobExecutionParams()
+    job_execution_params.perform_train = True
+    job_execution_params.evaluate_over_train_set = False
+    job_execution_params.evaluate_over_test_set = False
+    job_execution_params.evaluate_after_every_iteration = False
+
     process_pool = Pool(NR_PROCESSES)
     for cur_config in config.iterate_over_configurations(all_configurations_params):
         print('Spawning training job for model params: ' + cur_config.to_string(separator=', '))
         jobs_status['total_nr_jobs'] += 1
         process_pool.apply_async(
-            perform_training, (cur_config, jobs_status['total_nr_jobs']),
+            train_and_eval_single_configuration, (cur_config, job_execution_params, jobs_status['total_nr_jobs']),
             callback=partial(on_success, cur_config),
             error_callback=partial(on_error, cur_config))
 
@@ -162,58 +158,20 @@ def train_multiple_configurations(NR_PROCESSES: int = 4):
             print(conf)
 
 
-def train_and_eval_single_configuration(execution_params):
-    model_config = SentimentModelConfiguration()
-    print('Model name: ' + model_config.model_name)
-    dataset = load_dataset(model_config)
-    features_extractor = CorpusFeaturesExtractor.load_or_create(model_config, dataset.train)
-    model = None
-
-    evaluation_datasets = []
-    if execution_params.evaluate_over_train_set:
-        evaluation_datasets.append(('train', dataset.train))
-    if execution_params.evaluate_over_test_set:
-        evaluation_datasets.append(('test', dataset.test))
-        features_extractor.initialize_corpus_features(dataset.test)
-
-    if execution_params.perform_train:
-        trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, model_config)
-        model = trainer.fit_using_mira_algorithm(
-            save_model_after_every_iteration=True,
-            datasets_to_evaluate_after_every_iteration=evaluation_datasets)
-        # model.save()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
-
-    for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
-        print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
-
-        if model is None:
-            model = SentimentModel.load(model_config, features_extractor)
-
-        inferred_dataset = evaluation_dataset.clone(copy_document_labels=False, copy_sentence_labels=False)
-        model.inference(inferred_dataset)
-
-        evaluation_set_ground_truth = evaluation_dataset.clone()
-        print(model.evaluate_model(inferred_dataset, evaluation_set_ground_truth))
-        # model.print_results_to_file(tagged_test_set, model_name, is_test=True)
-        model.confusion_matrix(inferred_dataset, evaluation_set_ground_truth)
-        # model.confusion_matrix_ten_max_errors(model_name, is_test=True)
-
-
 def main():
+    # Multiple configurations
     # train_multiple_configurations()
     # exit(0)
 
-    # config = SentimentModelConfiguration()
-    # perform_training(config)
-    # exit(0)
-
-    class ExecutionParams:
-        perform_train = True
-        evaluate_over_train_set = True
-        evaluate_over_test_set = True
-
-    execution_params = ExecutionParams()
-    train_and_eval_single_configuration(execution_params)
+    # Single configuration (train + optional eval)
+    job_execution_params = JobExecutionParams()
+    job_execution_params.perform_train = True
+    job_execution_params.evaluate_over_train_set = True
+    job_execution_params.evaluate_over_test_set = True
+    job_execution_params.evaluate_after_every_iteration = True
+    model_config = SentimentModelConfiguration()
+    train_and_eval_single_configuration(model_config, job_execution_params)
+    exit(0)
 
 
 if __name__ == "__main__":
