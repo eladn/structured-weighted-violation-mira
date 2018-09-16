@@ -7,6 +7,7 @@ from utils import print_title
 from constants import SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, DOCUMENT_CLASSIFIER, STRUCTURED_JOINT
 from dict_itertools import union, values_union, times
 
+import sys
 import os
 from functools import partial
 from collections import namedtuple
@@ -68,9 +69,11 @@ def load_dataset(config: SentimentModelConfiguration):
 
 def perform_training(model_config: SentimentModelConfiguration, job_number: int=None):
     if job_number is not None:
-        fd = os.open("./run_results/training_run_results__" + model_config.model_name + ".txt", os.O_RDWR | os.O_CREAT)
-        os.dup2(fd, 1)
-        os.dup2(fd, 2)
+        # TODO: add current time in output log filename.
+        output_log_fd = os.open(
+            "./run_results/training_run_results__" + model_config.model_name + ".txt", os.O_RDWR | os.O_CREAT)
+        os.dup2(output_log_fd, sys.stdout.fileno())
+        os.dup2(output_log_fd, sys.stderr.fileno())
 
     print('Model name: ' + model_config.to_string(', '))
     dataset = load_dataset(model_config)
