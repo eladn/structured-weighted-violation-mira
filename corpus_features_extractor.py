@@ -465,5 +465,5 @@ class CorpusFeaturesExtractor:
             feature_indices = self.evaluate_clique_feature_vector(
                 document, sentence, y_document, y_sentence, y_pre_sentence)
             col_ind += list(feature_indices)  # TODO: consider stacking it all in array (size can be known)
-            row_ind += [sentence.index - 1 for _ in feature_indices]
+            row_ind += [sentence.index - start_from_sentence_idx for _ in feature_indices]
         return csr_matrix(([1 for _ in col_ind], (row_ind, col_ind)), shape=(nr_sentences, self.nr_features))
