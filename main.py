@@ -76,7 +76,6 @@ def perform_training(model_config: SentimentModelConfiguration, job_number: int=
     dataset = load_dataset(model_config)
     features_extractor = CorpusFeaturesExtractor.load_or_create(model_config, dataset.train)
     trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, model_config)
-    trainer.evaluate_feature_vectors()
     model = trainer.fit_using_mira_algorithm(save_model_after_every_iteration=True)
     # model.save_model()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
 
@@ -176,7 +175,6 @@ def train_and_eval_single_configuration(execution_params):
 
     if execution_params.perform_train:
         trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, model_config)
-        trainer.evaluate_feature_vectors()
         model = trainer.fit_using_mira_algorithm(
             save_model_after_every_iteration=True,
             datasets_to_evaluate_after_every_iteration=evaluation_datasets)

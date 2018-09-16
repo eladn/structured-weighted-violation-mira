@@ -37,6 +37,7 @@ class SentimentModelTrainer:
         self.train_corpus = train_corpus
         self.features_extractor = features_extractor
         self.evaluated_feature_vectors = []
+        self.evaluated_feature_vectors_summed = []
         self.model_config = model_config
 
     def evaluate_feature_vectors(self):
@@ -47,10 +48,23 @@ class SentimentModelTrainer:
             pb.start_next_task()
             self.evaluated_feature_vectors.append(self.features_extractor.evaluate_document_feature_vector(document))
         pb.finish()
-        print("evaluate_feature_vectors done: {0:.3f} seconds".format(time.time() - start_time))
+        print("evaluate_feature_vectors() done: {0:.3f} seconds".format(time.time() - start_time))
+
+    def evaluate_feature_vectors_summed(self):
+        start_time = time.time()
+        print("Evaluating features")
+        pb = ProgressBar(len(self.train_corpus.documents))
+        self.evaluated_feature_vectors_summed = []
+        for document in self.train_corpus.documents:
+            pb.start_next_task()
+            self.evaluated_feature_vectors_summed.append(
+                self.features_extractor.evaluate_document_feature_vector_summed(document))
+        pb.finish()
+        print("evaluate_feature_vectors_summed() done: {0:.3f} seconds".format(time.time() - start_time))
 
     def fit_using_mira_algorithm(self, save_model_after_every_iteration: bool = False,
                                  datasets_to_evaluate_after_every_iteration: list = None):
+        self.evaluate_feature_vectors_summed()
         optimization_time = time.time()
         print_title("Training model: {model}, k-best-viterbi = {k_viterbi}, k-random = {k_rnd}, iterations = {iter}".format(
             model=self.model_config.model_type,
@@ -68,7 +82,7 @@ class SentimentModelTrainer:
             for document_nr, (batch_start_idx, documents_batch, test_documents_batch, feature_vectors_batch) \
                 in enumerate(shuffle_iterate_over_batches(self.train_corpus.documents,
                                                           corpus_without_labels.documents,
-                                                          self.evaluated_feature_vectors,
+                                                          self.evaluated_feature_vectors_summed,
                                                           batch_size=batch_size), start=1):
                 to_doc_nr = min(self.train_corpus.count_documents(), batch_start_idx + batch_size)
                 flg_infer_top_k_per_each_document_label = self.model_config.infer_document_label and (2 * cur_iter < self.model_config.mira_iterations)
@@ -139,13 +153,11 @@ class SentimentModelTrainer:
         h = []
 
         next_G_line_idx = 0
-        for document, feature_vectors, mira_labelings in zip(documents_batch, feature_vectors_batch, mira_labelings_batch):
+        for document, feature_vector_summed, mira_labelings in zip(documents_batch, feature_vectors_batch, mira_labelings_batch):
             y = document.y()
-            y_fv = feature_vectors.sum(axis=0)
-            y_fv = np.asarray(y_fv).reshape((y_fv.shape[1],))
+            y_fv = feature_vector_summed
             for y_tag in mira_labelings:
-                y_tag_fv = self.features_extractor.evaluate_document_feature_vector(document, y_tag).sum(axis=0)
-                y_tag_fv = np.asarray(y_tag_fv)
+                y_tag_fv = self.features_extractor.evaluate_document_feature_vector_summed(document, y_tag)
 
                 G[next_G_line_idx, :] = (y_tag_fv - y_fv)
                 next_G_line_idx += 1
