@@ -50,7 +50,7 @@ class SentimentModelTrainer:
         print("evaluate_feature_vectors done: {0:.3f} seconds".format(time.time() - start_time))
 
     def fit_using_mira_algorithm(self, save_model_after_every_iteration: bool = False,
-                                 datasets_to_evaluate_after_every_iteration: list = False):
+                                 datasets_to_evaluate_after_every_iteration: list = None):
         optimization_time = time.time()
         print_title("Training model: {model}, k-best-viterbi = {k_viterbi}, k-random = {k_rnd}, iterations = {iter}".format(
             model=self.model_config.model_type,
@@ -116,7 +116,7 @@ class SentimentModelTrainer:
                 cnf.mira_iterations = cur_iter
                 model.save(cnf.model_weights_filename)
 
-            if len(datasets_to_evaluate_after_every_iteration) > 0:
+            if datasets_to_evaluate_after_every_iteration:
                 print()
                 for evaluation_dataset_name, evaluation_dataset in datasets_to_evaluate_after_every_iteration:
                     print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
