@@ -10,10 +10,10 @@ import sys
 
 class SentimentModelTrainerMIRA(SentimentModelTrainerBase):
 
-    def weights_update_step_on_batch(self, w, documents_batch: list, feature_vectors_batch: list,
-                                     inferred_labelings_batch: list):
+    def weights_update_step_on_batch(self, previous_w: np.ndarray, documents_batch: list,
+                                     feature_vectors_batch: list, inferred_labelings_batch: list):
         P, q, G, h = self.extract_qp_matrices(
-            w, documents_batch, feature_vectors_batch, inferred_labelings_batch)
+            previous_w, documents_batch, feature_vectors_batch, inferred_labelings_batch)
         next_w = solve_qp(P, q, G, h, solver="osqp")
         if np.any(np.equal(next_w, None)):
             print(file=sys.stderr)
@@ -22,10 +22,10 @@ class SentimentModelTrainerMIRA(SentimentModelTrainerBase):
             return None
         return next_w
 
-    def extract_qp_matrices(self, w, documents_batch: list, feature_vectors_batch: list,
-                            inferred_labelings_batch: list):
+    def extract_qp_matrices(self, previous_w: np.ndarray, documents_batch: list,
+                            feature_vectors_batch: list, inferred_labelings_batch: list):
         M = sparse.eye(self.features_extractor.nr_features)
-        q = np.copy(w) * -1
+        q = np.copy(previous_w) * -1
         nr_labelings = sum(len(labelings) for labelings in inferred_labelings_batch)
         G = np.zeros((nr_labelings, self.features_extractor.nr_features))
         h = []

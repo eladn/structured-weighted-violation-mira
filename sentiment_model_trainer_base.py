@@ -63,27 +63,27 @@ class SentimentModelTrainerBase(ABC):
         optimization_time = time.time()
         print_title("Training model: {model}, k-best-viterbi = {k_viterbi}, k-random = {k_rnd}, iterations = {iter}".format(
             model=self.model_config.model_type,
-            k_viterbi=self.model_config.mira_k_best_viterbi_labelings,
-            k_rnd=self.model_config.mira_k_random_labelings,
-            iter=self.model_config.mira_iterations))
-        nr_batchs_per_iteration = int(np.ceil(len(self.train_corpus.documents) / self.model_config.mira_batch_size))
-        pb = ProgressBar(self.model_config.mira_iterations * nr_batchs_per_iteration)
+            k_viterbi=self.model_config.training_k_best_viterbi_labelings,
+            k_rnd=self.model_config.training_k_random_labelings,
+            iter=self.model_config.training_iterations))
+        nr_batchs_per_iteration = int(np.ceil(len(self.train_corpus.documents) / self.model_config.training_batch_size))
+        pb = ProgressBar(self.model_config.training_iterations * nr_batchs_per_iteration)
         corpus_without_labels = self.train_corpus.clone(copy_document_labels=False, copy_sentence_labels=False)
         initial_weights = np.zeros(self.features_extractor.nr_features)
         model = SentimentModel(self.features_extractor, self.model_config, initial_weights)
-        use_batchs = (self.model_config.mira_batch_size and self.model_config.mira_batch_size > 1)
-        batch_size = self.model_config.mira_batch_size if use_batchs else 1
-        for cur_iter in range(1, self.model_config.mira_iterations+1):
+        use_batchs = (self.model_config.training_batch_size and self.model_config.training_batch_size > 1)
+        batch_size = self.model_config.training_batch_size if use_batchs else 1
+        for cur_iter in range(1, self.model_config.training_iterations + 1):
             for document_nr, (batch_start_idx, documents_batch, test_documents_batch, feature_vectors_batch) \
                 in enumerate(shuffle_iterate_over_batches(self.train_corpus.documents,
                                                           corpus_without_labels.documents,
                                                           self.evaluated_feature_vectors_summed,
                                                           batch_size=batch_size), start=1):
                 to_doc_nr = min(self.train_corpus.count_documents(), batch_start_idx + batch_size)
-                flg_infer_top_k_per_each_document_label = self.model_config.infer_document_label and (2 * cur_iter < self.model_config.mira_iterations)
+                flg_infer_top_k_per_each_document_label = self.model_config.infer_document_label and (2 * cur_iter < self.model_config.training_iterations)
                 task_str = 'iter: {cur_iter}/{nr_iters} -- document{plural_if_batch}: {cur_doc_nr}{to_doc_nr}/{nr_docs}'.format(
                     cur_iter=cur_iter,
-                    nr_iters=self.model_config.mira_iterations,
+                    nr_iters=self.model_config.training_iterations,
                     plural_if_batch='s' if use_batchs else '',
                     cur_doc_nr=batch_start_idx+1,
                     to_doc_nr='-{}'.format(to_doc_nr),
@@ -95,11 +95,11 @@ class SentimentModelTrainerBase(ABC):
                 inferred_labelings_batch = []
                 for document, test_document in zip(documents_batch, test_documents_batch):
                     document_generated_labelings = []
-                    if self.model_config.mira_k_random_labelings > 0:
+                    if self.model_config.training_k_random_labelings > 0:
                         document_generated_labelings = self.extract_random_labeling_subset(
-                            document, self.model_config.mira_k_random_labelings)
-                    if self.model_config.mira_k_best_viterbi_labelings > 0:
-                        top_k = min(self.model_config.mira_k_best_viterbi_labelings, NR_SENTENCE_LABELS ** document.count_sentences())
+                            document, self.model_config.training_k_random_labelings)
+                    if self.model_config.training_k_best_viterbi_labelings > 0:
+                        top_k = min(self.model_config.training_k_best_viterbi_labelings, NR_SENTENCE_LABELS ** document.count_sentences())
                         viterbi_labelings = model.viterbi_inference(
                             test_document,
                             infer_document_label=self.model_config.infer_document_label,
@@ -167,7 +167,7 @@ class SentimentModelTrainerBase(ABC):
         return y_tag_loss
 
     @abstractmethod
-    def weights_update_step_on_batch(self, w, documents_batch: list, feature_vectors_batch: list,
-                                     inferred_labelings_batch: list):
+    def weights_update_step_on_batch(self, previous_w: np.ndarray, documents_batch: list,
+                                     feature_vectors_batch: list, inferred_labelings_batch: list):
         """Pure abstract method. Must be implemented by the inheritor."""
         ...

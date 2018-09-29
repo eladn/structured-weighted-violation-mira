@@ -3,11 +3,11 @@ from utils import hash_file, AttributePrinter
 
 
 class SentimentModelConfiguration:
-    trainer_alg = 'mira'  # {'mira', 'SWVM'}
-    mira_k_random_labelings = 0
-    mira_k_best_viterbi_labelings = 15
-    mira_iterations = 5
-    mira_batch_size = 8
+    trainer_alg = 'mira'  # {'mira', 'SWVM'}  # TODO: put on attribute printers and add to already trained model files!
+    training_k_random_labelings = 0
+    training_k_best_viterbi_labelings = 15
+    training_iterations = 5
+    training_batch_size = 8
 
     loss_type = 'max'  # {'mult', 'plus', 'max'}
     doc_loss_factor = 1

@@ -82,15 +82,15 @@ all_configurations_params = times(
     union(
         times(
             model_type=values_union(SENTENCE_CLASSIFIER, DOCUMENT_CLASSIFIER),
-            mira_k_best_viterbi_labelings=0,
-            mira_k_random_labelings=values_union(1, 5, 10, 15)
+            training_k_best_viterbi_labelings=0,
+            training_k_random_labelings=values_union(1, 5, 10, 15)
         ),
         times(
             union(
-                times(mira_k_random_labelings=values_union(0, 1, 2),
-                      mira_k_best_viterbi_labelings=values_union(1, 5, 10, 15)),
-                times(mira_k_random_labelings=values_union(1, 5, 10, 15),
-                      mira_k_best_viterbi_labelings=0)
+                times(training_k_random_labelings=values_union(0, 1, 2),
+                      training_k_best_viterbi_labelings=values_union(1, 5, 10, 15)),
+                times(training_k_random_labelings=values_union(1, 5, 10, 15),
+                      training_k_best_viterbi_labelings=0)
             ),
             union(
                 times(model_type=SENTENCE_STRUCTURED, loss_type='plus'),
@@ -103,8 +103,10 @@ all_configurations_params = times(
             )
         )
     ),
-    mira_iterations=11,
-    min_nr_feature_occurrences=values_union(2, 3, 4, 5)
+    training_iterations=11,
+    min_nr_feature_occurrences=values_union(2, 3, 4, 5),
+    training_batch_size=8,
+    trainer_alg='mira'  # values_union('mira', 'SWVM')
 )
 
 
