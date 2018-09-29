@@ -3,6 +3,7 @@ from utils import hash_file, AttributePrinter
 
 
 class SentimentModelConfiguration:
+    trainer_alg = 'mira'  # {'mira', 'SWVM'}
     mira_k_random_labelings = 0
     mira_k_best_viterbi_labelings = 15
     mira_iterations = 5

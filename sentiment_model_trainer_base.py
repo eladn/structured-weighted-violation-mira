@@ -1,18 +1,13 @@
 import random
-from scipy import sparse
 
 import numpy as np
 import time
 from random import shuffle
 
-from qpsolvers import solve_qp
-from scipy.sparse import csr_matrix
 from sklearn.metrics import hamming_loss, zero_one_loss
-from warnings import warn
-import sys
+from abc import ABC, abstractmethod
 
-from constants import STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, \
-    DOCUMENT_LABELS, SENTENCE_LABELS, NR_SENTENCE_LABELS
+from constants import DOCUMENT_LABELS, SENTENCE_LABELS, NR_SENTENCE_LABELS
 from corpus import Corpus
 from document import Document
 from sentence import Sentence
@@ -22,7 +17,7 @@ from utils import ProgressBar, print_title, shuffle_iterate_over_batches
 from sentiment_model_configuration import SentimentModelConfiguration
 
 
-class SentimentModelTrainer:
+class SentimentModelTrainerBase(ABC):
     def __init__(self, train_corpus: Corpus, features_extractor: CorpusFeaturesExtractor,
                  model_config: SentimentModelConfiguration):
 
@@ -62,8 +57,8 @@ class SentimentModelTrainer:
         pb.finish()
         print("evaluate_feature_vectors_summed() done: {0:.3f} seconds".format(time.time() - start_time))
 
-    def fit_using_mira_algorithm(self, save_model_after_every_iteration: bool = False,
-                                 datasets_to_evaluate_after_every_iteration: list = None):
+    def fit(self, save_model_after_every_iteration: bool = False,
+            datasets_to_evaluate_after_every_iteration: list = None):
         self.evaluate_feature_vectors_summed()
         optimization_time = time.time()
         print_title("Training model: {model}, k-best-viterbi = {k_viterbi}, k-random = {k_rnd}, iterations = {iter}".format(
@@ -97,7 +92,7 @@ class SentimentModelTrainer:
                 pb.start_next_task(task_str)
 
                 # Generate labelings for each document.
-                mira_labelings_batch = []
+                inferred_labelings_batch = []
                 for document, test_document in zip(documents_batch, test_documents_batch):
                     document_generated_labelings = []
                     if self.model_config.mira_k_random_labelings > 0:
@@ -114,17 +109,12 @@ class SentimentModelTrainer:
                         document_generated_labelings += viterbi_labelings
                         shuffle(document_generated_labelings)
                     assert(len(document_generated_labelings) >= 1)
-                    mira_labelings_batch.append(document_generated_labelings)
+                    inferred_labelings_batch.append(document_generated_labelings)
 
-                P, q, G, h = self.extract_qp_matrices(
-                    model.w, documents_batch, feature_vectors_batch, mira_labelings_batch)
-                w = solve_qp(P, q, G, h, solver="osqp")
-                if np.any(np.equal(w, None)):
-                    print(file=sys.stderr)
-                    warn_msg = "QP solver returned `None`s solution vector. Weights vector `w` has not been updated. [{}]".format(task_str)
-                    warn(warn_msg)
-                else:
-                    model.w = w
+                next_w = self.weights_update_step_on_batch(model.w, documents_batch, feature_vectors_batch, inferred_labelings_batch)
+                if next_w is not None:
+                    model.w = next_w
+
             if save_model_after_every_iteration:
                 cnf = self.model_config.clone()
                 cnf.mira_iterations = cur_iter
@@ -145,52 +135,39 @@ class SentimentModelTrainer:
         print("MIRA training completed. Total execution time: {0:.3f} seconds".format(time.time() - optimization_time))
         return model
 
-    def extract_qp_matrices(self, w, documents_batch, feature_vectors_batch, mira_labelings_batch):
-        M = sparse.eye(self.features_extractor.nr_features)
-        q = np.copy(w) * -1
-        nr_labelings = sum(len(labelings) for labelings in mira_labelings_batch)
-        G = np.zeros((nr_labelings, self.features_extractor.nr_features))
-        h = []
-
-        next_G_line_idx = 0
-        for document, feature_vector_summed, mira_labelings in zip(documents_batch, feature_vectors_batch, mira_labelings_batch):
-            y = document.y()
-            y_fv = feature_vector_summed
-            for y_tag in mira_labelings:
-                y_tag_fv = self.features_extractor.evaluate_document_feature_vector_summed(document, y_tag)
-
-                G[next_G_line_idx, :] = (y_tag_fv - y_fv)
-                next_G_line_idx += 1
-
-                # y_tag_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]])
-                # y_tag_loss = y_tag_sentences_loss * y_tag_document_loss  # original loss
-
-                y_tag_document_loss = 0
-                if self.model_config.infer_document_label:
-                    y_tag_document_loss = zero_one_loss([y[0]], [y_tag[0]])
-
-                if not self.model_config.infer_sentences_labels:
-                    y_tag_loss = y_tag_document_loss
-                else:
-                    y_tag_sentences_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:])
-                    y_tag_loss = y_tag_sentences_loss
-
-                    if self.model_config.infer_document_label:
-                        if self.model_config.loss_type == 'mult':
-                            y_tag_loss *= y_tag_document_loss
-                        elif self.model_config.loss_type == 'plus':
-                            y_tag_loss += self.model_config.doc_loss_factor * y_tag_document_loss
-                        elif self.model_config.loss_type == 'max':
-                            y_tag_loss = max(y_tag_loss, y_tag_document_loss)
-
-                h.append(-y_tag_loss)
-        G = csr_matrix(G)
-        h = np.array(h).reshape(-1, )
-        return M, q.reshape(self.features_extractor.nr_features, ), G, h
-
     def extract_random_labeling_subset(self, document: Document, k: int):
         use_document_tag = not self.model_config.infer_document_label
         return [
             [document.label if use_document_tag else random.choice(DOCUMENT_LABELS)] +
             [random.choice(SENTENCE_LABELS) for _ in range(document.count_sentences())]
             for _ in range(k)]
+
+    def calc_labeling_loss(self, y: list, y_tag: list):
+        # y_tag_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:]) * zero_one_loss([y[0]], [y_tag[0]])
+        # y_tag_loss = y_tag_sentences_loss * y_tag_document_loss  # original loss
+
+        y_tag_document_loss = 0
+        if self.model_config.infer_document_label:
+            y_tag_document_loss = zero_one_loss([y[0]], [y_tag[0]])
+
+        if not self.model_config.infer_sentences_labels:
+            y_tag_loss = y_tag_document_loss
+        else:
+            y_tag_sentences_loss = hamming_loss(y_true=y[1:], y_pred=y_tag[1:])
+            y_tag_loss = y_tag_sentences_loss
+
+            if self.model_config.infer_document_label:
+                if self.model_config.loss_type == 'mult':
+                    y_tag_loss *= y_tag_document_loss
+                elif self.model_config.loss_type == 'plus':
+                    y_tag_loss += self.model_config.doc_loss_factor * y_tag_document_loss
+                elif self.model_config.loss_type == 'max':
+                    y_tag_loss = max(y_tag_loss, y_tag_document_loss)
+
+        return y_tag_loss
+
+    @abstractmethod
+    def weights_update_step_on_batch(self, w, documents_batch: list, feature_vectors_batch: list,
+                                     inferred_labelings_batch: list):
+        """Pure abstract method. Must be implemented by the inheritor."""
+        ...

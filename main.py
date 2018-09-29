@@ -1,5 +1,5 @@
 from corpus_features_extractor import CorpusFeaturesExtractor
-from sentiment_model_trainer import SentimentModelTrainer
+from sentiment_model_trainer_factory import SentimentModelTrainerFactory
 from sentiment_model import SentimentModel
 from sentiment_model_configuration import SentimentModelConfiguration
 from utils import print_title
@@ -51,8 +51,9 @@ def train_and_eval_single_configuration(model_config: SentimentModelConfiguratio
     evaluation_datasets__after_every_iteration = evaluation_datasets if job_execution_params.evaluate_after_every_iteration else None
 
     if job_execution_params.perform_train:
-        trainer = SentimentModelTrainer(dataset.train.clone(), features_extractor, model_config)
-        model = trainer.fit_using_mira_algorithm(
+        trainer = SentimentModelTrainerFactory().create_trainer(
+            dataset.train.clone(), features_extractor, model_config)
+        model = trainer.fit(
             save_model_after_every_iteration=True,
             datasets_to_evaluate_after_every_iteration=evaluation_datasets__after_every_iteration)
         # model.save()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.

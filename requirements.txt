@@ -3,4 +3,9 @@
 # from the anaconda directory:
 pip install qpsolvers
 
+# for MIRA
 conda install -c oxfordcontrol osqp
+
+# for SWVP
+conda install -c conda-forge lapack
+conda install -c cvxgrp cvxpy
