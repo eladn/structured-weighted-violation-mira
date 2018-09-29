@@ -57,20 +57,24 @@ def train_and_eval_single_configuration(model_config: SentimentModelConfiguratio
             datasets_to_evaluate_after_every_iteration=evaluation_datasets__after_every_iteration)
         # model.save()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
 
+    if model is None:
+        model = SentimentModel.load(model_config, features_extractor)
+
+    evaluation_results = {}
     for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
         print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
-
-        if model is None:
-            model = SentimentModel.load(model_config, features_extractor)
 
         inferred_dataset = evaluation_dataset.clone(copy_document_labels=False, copy_sentence_labels=False)
         model.inference(inferred_dataset)
 
         evaluation_set_ground_truth = evaluation_dataset.clone()
-        print(model.evaluate_model(inferred_dataset, evaluation_set_ground_truth))
+        evaluation_results[evaluation_dataset_name] = model.evaluate_model(inferred_dataset, evaluation_set_ground_truth)
+        print(evaluation_results)
         # model.print_results_to_file(tagged_test_set, model_name, is_test=True)
         model.confusion_matrix(inferred_dataset, evaluation_set_ground_truth)
         # model.confusion_matrix_ten_max_errors(model_name, is_test=True)
+
+    return evaluation_results
 
 
 all_configurations_params = times(
@@ -103,7 +107,7 @@ all_configurations_params = times(
 )
 
 
-def train_multiple_configurations(NR_PROCESSES: int = 4):
+def train_multiple_configurations(job_execution_params: JobExecutionParams, NR_PROCESSES: int = 4):
     """
     Creates a processes pool, spawns all training jobs into the pool, wait for all jobs executions to finish.
     """
@@ -121,10 +125,11 @@ def train_multiple_configurations(NR_PROCESSES: int = 4):
                 nr_failed=jobs_status['nr_failed_jobs']
             ))
 
-    def on_success(conf: SentimentModelConfiguration, value):
+    def on_success(conf: SentimentModelConfiguration, result_value):
         jobs_status['nr_completed_jobs'] += 1
         print('========   Successfully completed job over configuration: ' + conf.to_string('  ') + '   ========')
         print_jobs_progress()
+        # TODO: write `result_value` to evaluation results file.
 
     def on_error(conf: SentimentModelConfiguration, value):
         failed_configurations.append(conf)
@@ -160,7 +165,12 @@ def train_multiple_configurations(NR_PROCESSES: int = 4):
 
 def main():
     # Multiple configurations
-    # train_multiple_configurations()
+    job_execution_params = JobExecutionParams()
+    job_execution_params.perform_train = True
+    job_execution_params.evaluate_over_train_set = True
+    job_execution_params.evaluate_over_test_set = True
+    job_execution_params.evaluate_after_every_iteration = False
+    # train_multiple_configurations(job_execution_params)
     # exit(0)
 
     # Single configuration (train + optional eval)
