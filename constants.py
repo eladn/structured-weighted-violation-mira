@@ -16,15 +16,25 @@ MODEL_TYPES = (STRUCTURED_JOINT, DOCUMENT_CLASSIFIER,
 INFER_DOCUMENT_MODEL_TYPES = (STRUCTURED_JOINT, DOCUMENT_CLASSIFIER)
 INFER_SENTENCES_MODEL_TYPES = (STRUCTURED_JOINT, SENTENCE_STRUCTURED, SENTENCE_CLASSIFIER)
 
-PATH = os.path.dirname(os.path.realpath(__file__))
-DATA_PATH = PATH + "/data/"
-MODELS_PATH = PATH + "/models/"
-FEATURES_EXTRACTORS_PATH = PATH + "/features_extractors/"
-# BASIC_MODELS_PATH = MODELS_PATH + "basic/"
-# ADVANCED_MODELS_PATH = MODELS_PATH + "advanced/"
-TEST_PATH = PATH + "/test/"
-# BASIC_TEST_PATH = TEST_PATH + "basic/"
-# ADVANCED_TEST_PATH = TEST_PATH + "advanced/"
-# COMP_PATH = PATH + "/comp/"
-# BASIC_COMP_PATH = COMP_PATH + "basic/"
-# ADVANCED_COMP_PATH = COMP_PATH + "advanced/"
+PROJECT_PATH = os.path.dirname(os.path.realpath(__file__))
+DATA_PATH = os.path.join(PROJECT_PATH, "data/")
+MODELS_PATH = os.path.join(PROJECT_PATH, "models/")
+FEATURES_EXTRACTORS_PATH = os.path.join(PROJECT_PATH, "features_extractors/")
+# BASIC_MODELS_PATH = os.path.join(MODELS_PATH, "basic/")
+# ADVANCED_MODELS_PATH = os.path.join(MODELS_PATH, "advanced/")
+TEST_PATH = os.path.join(PROJECT_PATH, "test/")
+# BASIC_TEST_PATH = os.path.join(TEST_PATH, "basic/")
+# ADVANCED_TEST_PATH = os.path.join(TEST_PATH, "advanced/")
+# COMP_PATH = os.path.join(PROJECT_PATH, "comp/")
+# BASIC_COMP_PATH = os.path.join(COMP_PATH, "basic/")
+# ADVANCED_COMP_PATH = os.path.join(COMP_PATH, "advanced/")
+EVALUATION_RESULTS_PATH = os.path.join(PROJECT_PATH, "evaluation_results/")
+
+
+def make_dirs_if_not_exist(dirpaths):
+    for dirpath in dirpaths:
+        if not os.path.isdir(dirpath):
+            os.mkdir(dirpath)
+
+
+make_dirs_if_not_exist([DATA_PATH, MODELS_PATH, FEATURES_EXTRACTORS_PATH, TEST_PATH, EVALUATION_RESULTS_PATH])

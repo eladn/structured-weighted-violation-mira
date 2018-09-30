@@ -3,7 +3,8 @@ from sentiment_model_trainer_factory import SentimentModelTrainerFactory
 from sentiment_model import SentimentModel
 from sentiment_model_configuration import SentimentModelConfiguration
 from utils import print_title
-from constants import SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, DOCUMENT_CLASSIFIER, STRUCTURED_JOINT
+from constants import SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, DOCUMENT_CLASSIFIER, STRUCTURED_JOINT, \
+        EVALUATION_RESULTS_PATH
 from dict_itertools import union, values_union, times
 from dataset import load_dataset
 
@@ -93,6 +94,8 @@ def train_and_eval_single_configuration(model_config: SentimentModelConfiguratio
     for iter_nr in evaluation_for_iter_numbers:
         eval_model_config.training_iterations = iter_nr
         model = SentimentModel.load(eval_model_config, features_extractor)
+        if model is None:
+            continue
 
         evaluation_results_for_cur_iter = {}
         for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
@@ -154,7 +157,7 @@ def train_and_eval_multiple_configurations(job_execution_params: JobExecutionPar
     jobs_status = {'total_nr_jobs': 0, 'nr_completed_jobs': 0, 'nr_failed_jobs': 0}
     failed_configurations = []
     evaluation_results = []
-    evaluation_results_json_filepath = './evaluation_results/multiple_configurations_evaluation_results.json'  # TODO: in dir
+    evaluation_results_json_filepath = os.path.join(EVALUATION_RESULTS_PATH, 'multiple_configurations_evaluation_results.json')
 
     def print_jobs_progress():
         print(

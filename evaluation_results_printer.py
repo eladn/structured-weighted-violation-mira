@@ -1,7 +1,8 @@
+import os
 import json
 from collections import namedtuple
 from constants import MODEL_TYPES, INFER_DOCUMENT_MODEL_TYPES, INFER_SENTENCES_MODEL_TYPES, \
-    STRUCTURED_JOINT, DOCUMENT_CLASSIFIER
+    STRUCTURED_JOINT, DOCUMENT_CLASSIFIER, EVALUATION_RESULTS_PATH
 
 
 def argmax(iterable, key=None):
@@ -67,7 +68,8 @@ def evaluation_results_table_to_str(evaluation_results_table: list, column_separ
 
 
 if __name__ == '__main__':
-    evaluation_results_filepath_no_ext = './evaluation_results/multiple_configurations_evaluation_results copy 5'
+    evaluation_results_filepath_no_ext = os.path.join(EVALUATION_RESULTS_PATH,
+                                                      'multiple_configurations_evaluation_results')
     evaluation_results_json_filepath = evaluation_results_filepath_no_ext + '.json'
     with open(evaluation_results_json_filepath, 'r') as evaluation_results_json_file:
         evaluation_results = json.load(evaluation_results_json_file)
