@@ -10,6 +10,7 @@ from dataset import load_dataset
 import sys
 import os
 from functools import partial
+import json
 
 
 class JobExecutionParams:
@@ -17,6 +18,15 @@ class JobExecutionParams:
     evaluate_over_train_set = True
     evaluate_over_test_set = True
     evaluate_after_every_iteration = True
+
+    @property
+    def job_type_str(self):
+        qual = []
+        if self.perform_train:
+            qual.append('train')
+        if self.evaluate_over_train_set or self.evaluate_over_test_set:
+            qual.append('eval')
+        return '-and-'.join(qual)
 
 
 # def dummy_job(config: SentimentModelConfiguration, job_execution_params: JobExecutionParams, job_number: int):
@@ -32,8 +42,17 @@ def train_and_eval_single_configuration(model_config: SentimentModelConfiguratio
                                         job_number: int=None):
     if job_number is not None:
         # TODO: add current time in output log filename.
+        output_log_dirname = "run_results_{job_type}".format(
+            job_type=job_execution_params.job_type_str
+        )
+        output_log_dirpath = os.path.join(os.getcwd(), output_log_dirname)
+        if not os.path.isdir(output_log_dirpath):
+            os.mkdir(output_log_dirpath)
+        output_log_filename = "{job_type}_run_results__{model_name}.log".format(
+            job_type=job_execution_params.job_type_str, model_name=model_config.model_name)
+        output_log_filepath = os.path.join(output_log_dirpath, output_log_filename)
         output_log_fd = os.open(
-            "./run_results/training_run_results__" + model_config.model_name + ".txt", os.O_RDWR | os.O_CREAT)
+            output_log_filepath, os.O_RDWR | os.O_CREAT)
         os.dup2(output_log_fd, sys.stdout.fileno())
         os.dup2(output_log_fd, sys.stderr.fileno())
 
@@ -58,24 +77,34 @@ def train_and_eval_single_configuration(model_config: SentimentModelConfiguratio
             datasets_to_evaluate_after_every_iteration=evaluation_datasets__after_every_iteration)
         # model.save()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
 
-    if model is None:
-        model = SentimentModel.load(model_config, features_extractor)
+    evaluation_for_iter_numbers = [model_config.training_iterations]
+    if job_execution_params.evaluate_after_every_iteration:
+        evaluation_for_iter_numbers = list(range(1, model_config.training_iterations+1))
 
-    evaluation_results = {}
-    for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
-        print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
+    # TODO: if also training, use intermediate evaluation results.
+    eval_model_config = model_config.clone()
+    evaluation_results_per_iter = {}
+    for iter_nr in evaluation_for_iter_numbers:
+        eval_model_config.training_iterations = iter_nr
+        model = SentimentModel.load(eval_model_config, features_extractor)
 
-        inferred_dataset = evaluation_dataset.clone(copy_document_labels=False, copy_sentence_labels=False)
-        model.inference(inferred_dataset)
+        evaluation_results_for_cur_iter = {}
+        for evaluation_dataset_name, evaluation_dataset in evaluation_datasets:
+            print_title("Model evaluation over {} set:".format(evaluation_dataset_name))
 
-        evaluation_set_ground_truth = evaluation_dataset.clone()
-        evaluation_results[evaluation_dataset_name] = model.evaluate_model(inferred_dataset, evaluation_set_ground_truth)
-        print(evaluation_results)
-        # model.print_results_to_file(tagged_test_set, model_name, is_test=True)
-        model.confusion_matrix(inferred_dataset, evaluation_set_ground_truth)
-        # model.confusion_matrix_ten_max_errors(model_name, is_test=True)
+            inferred_dataset = evaluation_dataset.clone(copy_document_labels=False, copy_sentence_labels=False)
+            model.inference(inferred_dataset)
 
-    return evaluation_results
+            evaluation_set_ground_truth = evaluation_dataset.clone()
+            evaluation_results_for_cur_iter[evaluation_dataset_name] = model.evaluate_model(inferred_dataset, evaluation_set_ground_truth)
+            print('iter #{}: {}'.format(iter_nr, evaluation_results_for_cur_iter))
+            # model.print_results_to_file(tagged_test_set, model_name, is_test=True)
+            model.confusion_matrix(inferred_dataset, evaluation_set_ground_truth)
+            # model.confusion_matrix_ten_max_errors(model_name, is_test=True)
+
+        evaluation_results_per_iter[iter_nr] = evaluation_results_for_cur_iter
+
+    return evaluation_results_per_iter
 
 
 all_configurations_params = times(
@@ -110,7 +139,7 @@ all_configurations_params = times(
 )
 
 
-def train_multiple_configurations(job_execution_params: JobExecutionParams, NR_PROCESSES: int = 4):
+def train_and_eval_multiple_configurations(job_execution_params: JobExecutionParams, NR_PROCESSES: int = 4):
     """
     Creates a processes pool, spawns all training jobs into the pool, wait for all jobs executions to finish.
     """
@@ -118,6 +147,8 @@ def train_multiple_configurations(job_execution_params: JobExecutionParams, NR_P
     config = SentimentModelConfiguration()
     jobs_status = {'total_nr_jobs': 0, 'nr_completed_jobs': 0, 'nr_failed_jobs': 0}
     failed_configurations = []
+    evaluation_results = []
+    evaluation_results_json_filepath = './evaluation_results/multiple_configurations_evaluation_results.json'  # TODO: in dir
 
     def print_jobs_progress():
         print(
@@ -132,7 +163,11 @@ def train_multiple_configurations(job_execution_params: JobExecutionParams, NR_P
         jobs_status['nr_completed_jobs'] += 1
         print('========   Successfully completed job over configuration: ' + conf.to_string('  ') + '   ========')
         print_jobs_progress()
-        # TODO: write `result_value` to evaluation results file.
+        print()
+        if result_value:
+            evaluation_results.append((conf.to_dict(), result_value))
+            with open(evaluation_results_json_filepath, 'w') as evaluation_results_output_file:
+                json.dump(evaluation_results, evaluation_results_output_file)
 
     def on_error(conf: SentimentModelConfiguration, value):
         failed_configurations.append(conf)
@@ -140,15 +175,12 @@ def train_multiple_configurations(job_execution_params: JobExecutionParams, NR_P
         jobs_status['nr_failed_jobs'] += 1
         print_jobs_progress()
 
-    job_execution_params = JobExecutionParams()
-    job_execution_params.perform_train = True
-    job_execution_params.evaluate_over_train_set = False
-    job_execution_params.evaluate_over_test_set = False
-    job_execution_params.evaluate_after_every_iteration = False
-
     process_pool = Pool(NR_PROCESSES)
     for cur_config in config.iterate_over_configurations(all_configurations_params):
-        print('Spawning training job for model params: ' + cur_config.to_string(separator=', '))
+        print('Spawning {job_type} job for model params: {cnf}'.format(
+            job_type=job_execution_params.job_type_str,
+            cnf=cur_config.to_string(separator=', '))
+        )
         jobs_status['total_nr_jobs'] += 1
         process_pool.apply_async(
             train_and_eval_single_configuration, (cur_config, job_execution_params, jobs_status['total_nr_jobs']),
@@ -157,6 +189,9 @@ def train_multiple_configurations(job_execution_params: JobExecutionParams, NR_P
 
     process_pool.close()
     process_pool.join()
+
+    with open(evaluation_results_json_filepath, 'w') as evaluation_results_output_file:
+        json.dump(evaluation_results, evaluation_results_output_file)
 
     print()
     print_jobs_progress()
@@ -169,12 +204,12 @@ def train_multiple_configurations(job_execution_params: JobExecutionParams, NR_P
 def main():
     # Multiple configurations
     job_execution_params = JobExecutionParams()
-    job_execution_params.perform_train = True
+    job_execution_params.perform_train = False
     job_execution_params.evaluate_over_train_set = True
     job_execution_params.evaluate_over_test_set = True
-    job_execution_params.evaluate_after_every_iteration = False
-    # train_multiple_configurations(job_execution_params)
-    # exit(0)
+    job_execution_params.evaluate_after_every_iteration = True
+    train_and_eval_multiple_configurations(job_execution_params)
+    exit(0)
 
     # Single configuration (train + optional eval)
     job_execution_params = JobExecutionParams()
