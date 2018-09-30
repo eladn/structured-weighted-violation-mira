@@ -6,9 +6,10 @@ import time
 
 
 class ProgressBar:
-    def __init__(self, nr_tasks):
+    def __init__(self, nr_tasks: int, already_completed_tasks: int = 0):
         self.nr_tasks = nr_tasks
-        self.curr_task = 0
+        self.curr_task = already_completed_tasks
+        self.already_completed_tasks_before_starting = already_completed_tasks  # for time estimations
         self.curr_task_title = ''
         self.start_time = None
 
@@ -45,7 +46,10 @@ class ProgressBar:
         else:
             # last step (verify 100% is printed and print new line in the end):
             sys.stdout.write("[%-50s] Done: %d%% out of %d. " % ('=' * 50, 100, self.nr_tasks))
-            sys.stdout.write("Total time: {0:.3f} seconds.\n".format(time.time() - self.start_time))
+            total_time = 0
+            if self.start_time is not None:
+                total_time = time.time() - self.start_time
+            sys.stdout.write("Total time: {0:.3f} seconds.\n".format(total_time))
         sys.stdout.flush()
 
 
