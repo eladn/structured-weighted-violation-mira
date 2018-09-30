@@ -24,6 +24,13 @@ class SentimentModelConfiguration:
 
     feature_extractor_random_state_seed = 0
 
+    def is_param_used(self, param_name: str):
+        if param_name == 'loss_type':
+            return self.model_type == STRUCTURED_JOINT
+        if param_name == 'doc_loss_factor':
+            return self.model_type == STRUCTURED_JOINT and self.loss_type == 'plus'
+        return True
+
     @property
     def pos_docs_train_filename(self):
         return 'pos-' + self.docs_train_filename_base_wo_ext + '.txt'
@@ -85,10 +92,12 @@ class SentimentModelConfiguration:
 
     model_configurations = (
         AttributePrinter(attribute='model_type', name='model'),
-        AttributePrinter(attribute='mira_k_random_labelings', name='k-rnd', print_iff_true=True),
-        AttributePrinter(attribute='mira_k_best_viterbi_labelings', name='k-viterbi', print_iff_true=True),
-        AttributePrinter(attribute='mira_iterations', name='iter'),
-        AttributePrinter(attribute='mira_batch_size', name='batch',
+        AttributePrinter(attribute='trainer_alg', name='alg',
+                         print_condition=lambda val, _: val != 'mira'),
+        AttributePrinter(attribute='training_k_random_labelings', name='k-rnd', print_iff_true=True),
+        AttributePrinter(attribute='training_k_best_viterbi_labelings', name='k-viterbi', print_iff_true=True),
+        AttributePrinter(attribute='training_iterations', name='iter'),
+        AttributePrinter(attribute='training_batch_size', name='batch',
                          print_condition=lambda value, _: value and int(value) > 1),
         AttributePrinter(attribute='loss_type_str', name='loss',
                          print_condition=lambda _, config: config.model_type == STRUCTURED_JOINT),
@@ -130,21 +139,32 @@ class SentimentModelConfiguration:
             setattr(new_config, param_name, getattr(self, param_name, default))
         return new_config
 
+    def from_dict(self, params_dict: dict):
+        for param_name, param_value in params_dict.items():
+            setattr(self, param_name, param_value)
+
+    def to_dict(self):
+        ret_dct = {
+            param_name: getattr(self, param_name, default)
+            for param_name, _, default in self.get_all_settable_params(flg_only_if_used=True)
+        }
+        return ret_dct
+
     @classmethod
     def get_all_params(cls):
         cnf = cls()
         return [(attr, type(getattr(cnf, attr)), getattr(cnf, attr)) for attr in dir(cnf)
                 if not callable(getattr(cnf, attr)) and not attr.startswith("__")]
 
-    @classmethod
-    def get_all_settable_params(cls):
+    def get_all_settable_params(self, flg_only_if_used: bool = False):
         return [(param_name, _type, default)
-                for param_name, _type, default in cls.get_all_params()
-                if _type in {str, int, float, bool} and not isinstance(getattr(cls, param_name, None), property)]
+                for param_name, _type, default in self.get_all_params()
+                if _type in {str, int, float, bool}
+                and (not isinstance(getattr(type(self), param_name, None), property))
+                and (not flg_only_if_used or self.is_param_used(param_name))]
 
     def iterate_over_configurations(self, params_dicts):
         for params_dict in params_dicts:
             config = self.clone()
-            for key, value in params_dict.items():
-                setattr(config, key, value)
+            config.from_dict(params_dict)
             yield config
