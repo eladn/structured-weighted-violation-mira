@@ -61,7 +61,8 @@ class SentimentModelTrainerBase(ABC):
         print("evaluate_feature_vectors_summed() done: {0:.3f} seconds".format(time.time() - start_time))
 
     def fit(self, save_model_after_every_iteration: bool = False,
-            datasets_to_evaluate_after_every_iteration: list = None):
+            datasets_to_evaluate_after_every_iteration: list = None,
+            use_previous_iterations_if_exists: bool = False):
         self.evaluate_feature_vectors_summed()
         optimization_time = time.time()
         print_title("Training model: {model}, k-best-viterbi = {k_viterbi}, k-random = {k_rnd}, iterations = {iter}".format(
@@ -69,14 +70,27 @@ class SentimentModelTrainerBase(ABC):
             k_viterbi=self.model_config.training_k_best_viterbi_labelings,
             k_rnd=self.model_config.training_k_random_labelings,
             iter=self.model_config.training_iterations))
-        nr_batchs_per_iteration = int(np.ceil(len(self.train_corpus.documents) / self.model_config.training_batch_size))
-        pb = ProgressBar(self.model_config.training_iterations * nr_batchs_per_iteration)
-        corpus_without_labels = self.train_corpus.clone(copy_document_labels=False, copy_sentence_labels=False)
-        initial_weights = np.zeros(self.features_extractor.nr_features)
-        model = SentimentModel(self.features_extractor, self.model_config, initial_weights)
         use_batchs = (self.model_config.training_batch_size and self.model_config.training_batch_size > 1)
         batch_size = self.model_config.training_batch_size if use_batchs else 1
-        for cur_iter in range(1, self.model_config.training_iterations + 1):
+        nr_batchs_per_iteration = int(np.ceil(len(self.train_corpus.documents) / batch_size))
+
+        corpus_without_labels = self.train_corpus.clone(copy_document_labels=False, copy_sentence_labels=False)
+
+        model = None
+        if use_previous_iterations_if_exists:
+            model = SentimentModel.load(self.model_config, self.features_extractor,
+                                        load_model_with_max_iterno_found=True)
+        if model is None:
+            initial_weights = np.zeros(self.features_extractor.nr_features)
+            model = SentimentModel(self.features_extractor, self.model_config, initial_weights)
+            start_from_iterno = 1
+        else:
+            start_from_iterno = model.model_config.training_iterations + 1
+
+        pb = ProgressBar(self.model_config.training_iterations * nr_batchs_per_iteration,
+                         already_completed_tasks=(start_from_iterno-1)*nr_batchs_per_iteration)
+
+        for cur_iter in range(start_from_iterno, self.model_config.training_iterations + 1):
             for document_nr, (batch_start_idx, documents_batch, test_documents_batch, feature_vectors_batch) \
                 in enumerate(shuffle_iterate_over_batches(self.train_corpus.documents,
                                                           corpus_without_labels.documents,
@@ -114,13 +128,17 @@ class SentimentModelTrainerBase(ABC):
                     assert(len(document_generated_labelings) >= 1)
                     inferred_labelings_batch.append(document_generated_labelings)
 
-                next_w = self.weights_update_step_on_batch(model.w, documents_batch, feature_vectors_batch, inferred_labelings_batch)
+                # Perform an update-step (rule) on the current batch.
+                previous_w = model.w
+                next_w = self.weights_update_step_on_batch(
+                    previous_w, documents_batch, feature_vectors_batch, inferred_labelings_batch)
+                # Update w only if the optimizer succeed solving this update-step.
                 if next_w is not None:
                     model.w = next_w
 
             if save_model_after_every_iteration:
                 cnf = self.model_config.clone()
-                cnf.mira_iterations = cur_iter
+                cnf.training_iterations = cur_iter
                 model.save(cnf.model_weights_filename)
 
             if datasets_to_evaluate_after_every_iteration:

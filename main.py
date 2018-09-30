@@ -15,6 +15,7 @@ import json
 
 class JobExecutionParams:
     perform_train = True
+    use_saved_models_for_training = True
     evaluate_over_train_set = True
     evaluate_over_test_set = True
     evaluate_after_every_iteration = True
@@ -74,7 +75,8 @@ def train_and_eval_single_configuration(model_config: SentimentModelConfiguratio
             dataset.train.clone(), features_extractor, model_config)
         model = trainer.fit(
             save_model_after_every_iteration=True,
-            datasets_to_evaluate_after_every_iteration=evaluation_datasets__after_every_iteration)
+            datasets_to_evaluate_after_every_iteration=evaluation_datasets__after_every_iteration,
+            use_previous_iterations_if_exists=job_execution_params.use_saved_models_for_training)
         # model.save()  # already done by the argument `save_model_after_every_iteration` to the mira trainer.
 
     evaluation_for_iter_numbers = [model_config.training_iterations]
@@ -208,8 +210,8 @@ def main():
     job_execution_params.evaluate_over_train_set = True
     job_execution_params.evaluate_over_test_set = True
     job_execution_params.evaluate_after_every_iteration = True
-    train_and_eval_multiple_configurations(job_execution_params)
-    exit(0)
+    # train_and_eval_multiple_configurations(job_execution_params)
+    # exit(0)
 
     # Single configuration (train + optional eval)
     job_execution_params = JobExecutionParams()

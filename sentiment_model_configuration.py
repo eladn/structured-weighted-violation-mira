@@ -129,6 +129,10 @@ class SentimentModelConfiguration:
         return self.model_name + '.txt'
 
     @property
+    def model_weights_filepath(self):
+        return os.path.join(MODELS_PATH, self.model_weights_filename)
+
+    @property
     def model_confusion_matrix_filename(self):
         return self.model_name + '__confusion_matrix.txt'
 
