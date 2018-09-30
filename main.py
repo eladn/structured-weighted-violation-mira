@@ -52,10 +52,14 @@ def train_and_eval_single_configuration(model_config: SentimentModelConfiguratio
         output_log_filename = "{job_type}_run_results__{model_name}.log".format(
             job_type=job_execution_params.job_type_str, model_name=model_config.model_name)
         output_log_filepath = os.path.join(output_log_dirpath, output_log_filename)
-        output_log_fd = os.open(
-            output_log_filepath, os.O_RDWR | os.O_CREAT)
-        os.dup2(output_log_fd, sys.stdout.fileno())
-        os.dup2(output_log_fd, sys.stderr.fileno())
+
+        # output_log_fd = os.open(
+        #     output_log_filepath, os.O_RDWR | os.O_CREAT)
+        # os.dup2(output_log_fd, sys.stdout.fileno())
+        # os.dup2(output_log_fd, sys.stderr.fileno())
+        output_log_fd = open(output_log_filepath, 'w+')
+        sys.stdout = output_log_fd
+        sys.stderr = output_log_fd
 
     print('Model name: ' + model_config.model_name)
     dataset = load_dataset(model_config)
