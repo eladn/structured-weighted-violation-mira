@@ -3,7 +3,7 @@ from document import Document
 from sentence import Sentence
 from sentiment_model_configuration import SentimentModelConfiguration
 from utils import ProgressBar, Singleton
-from constants import MODELS, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, STRUCTURED_JOINT, \
+from constants import MODEL_TYPES, DOCUMENT_CLASSIFIER, SENTENCE_CLASSIFIER, SENTENCE_STRUCTURED, STRUCTURED_JOINT, \
     DOCUMENT_LABELS, SENTENCE_LABELS, FEATURES_EXTRACTORS_PATH
 
 import numpy as np
@@ -141,7 +141,7 @@ class SentenceFeatureAttributesExtractor(Singleton):
 # TODO: doc!
 class FeatureGroup(ABC):
     def __init__(self, use_in_models):
-        assert(isinstance(use_in_models, set) and all(model in MODELS for model in use_in_models))
+        assert(isinstance(use_in_models, set) and all(model in MODEL_TYPES for model in use_in_models))
         self.use_in_models = use_in_models
 
     @abstractmethod

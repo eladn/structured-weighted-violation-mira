@@ -80,11 +80,11 @@ class SentimentModelConfiguration:
 
     @property
     def infer_document_label(self):
-        return self.model_type in {DOCUMENT_CLASSIFIER, STRUCTURED_JOINT}
+        return self.model_type in INFER_DOCUMENT_MODEL_TYPES
 
     @property
     def infer_sentences_labels(self):
-        return self.model_type != DOCUMENT_CLASSIFIER
+        return self.model_type in INFER_SENTENCES_MODEL_TYPES
 
     @property
     def use_pre_sentence(self):
@@ -131,7 +131,7 @@ class SentimentModelConfiguration:
         return self.model_name + '__confusion_matrix.txt'
 
     def verify(self):
-        assert(self.model_type in MODELS)
+        assert(self.model_type in MODEL_TYPES)
 
     def clone(self):
         new_config = SentimentModelConfiguration()
