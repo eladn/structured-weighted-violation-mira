@@ -1,4 +1,5 @@
 
+import os
 import numpy as np
 import time
 from itertools import chain
@@ -354,9 +355,21 @@ class SentimentModel:
         np.savetxt(MODELS_PATH + model_weights_filename, self.w)
 
     @staticmethod
-    def load(model_config: SentimentModelConfiguration, features_extractor: CorpusFeaturesExtractor = None):
+    def load(model_config: SentimentModelConfiguration, features_extractor: CorpusFeaturesExtractor = None,
+             load_model_with_max_iterno_found: bool = False):
         if features_extractor is None:
             # features_extractor = CorpusFeaturesExtractor.load_or_create(model_config, dataset.train)
             pass  # TODO: load it!
-        model_weights = np.loadtxt(MODELS_PATH + model_config.model_weights_filename)
-        return SentimentModel(features_extractor, model_config, model_weights)
+
+        # Find model weights file, load it, and create a `SentimentModel` object.
+        iter_range = [model_config.training_iterations]
+        if load_model_with_max_iterno_found:
+            iter_range = range(model_config.training_iterations, 0, -1)
+        model_config_to_load = model_config.clone()
+        for iter_no in iter_range:
+            model_config_to_load.training_iterations = iter_no
+            filepath = model_config_to_load.model_weights_filepath
+            if os.path.isfile(filepath):
+                model_weights = np.loadtxt(filepath)
+                return SentimentModel(features_extractor, model_config_to_load, model_weights)
+        return None
