@@ -15,9 +15,11 @@ from corpus_features_extractor import CorpusFeaturesExtractor
 from sentiment_model import SentimentModel
 from utils import ProgressBar, print_title, shuffle_iterate_over_batches
 from sentiment_model_configuration import SentimentModelConfiguration
+from optimizers import *
 
 
 class SentimentModelTrainerBase(ABC):
+
     def __init__(self, train_corpus: Corpus, features_extractor: CorpusFeaturesExtractor,
                  model_config: SentimentModelConfiguration):
 
@@ -34,6 +36,7 @@ class SentimentModelTrainerBase(ABC):
         self.evaluated_feature_vectors = []
         self.evaluated_feature_vectors_summed = []
         self.model_config = model_config
+        self.optimizer = OPTIMIZERS[model_config.optimizer]()
 
     def evaluate_feature_vectors(self):
         start_time = time.time()
@@ -166,8 +169,15 @@ class SentimentModelTrainerBase(ABC):
 
         return y_tag_loss
 
-    @abstractmethod
     def weights_update_step_on_batch(self, previous_w: np.ndarray, documents_batch: list,
                                      feature_vectors_batch: list, inferred_labelings_batch: list):
+        G, L = self.calc_constraints_for_update_step_on_batch(previous_w, documents_batch, feature_vectors_batch, inferred_labelings_batch)
+        next_w = self.optimizer.find_next_weights_according_to_constraints(previous_w, G, L)
+        return next_w
+
+    @abstractmethod
+    def calc_constraints_for_update_step_on_batch(self, previous_w: np.ndarray, documents_batch: list,
+                                                  feature_vectors_batch: list, inferred_labelings_batch: list):
         """Pure abstract method. Must be implemented by the inheritor."""
         ...
+

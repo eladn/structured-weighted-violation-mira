@@ -3,6 +3,7 @@ from utils import hash_file, AttributePrinter
 
 
 class SentimentModelConfiguration:
+    optimizer = 'qp'  # {'qp', 'cvx'}
     trainer_alg = 'mira'  # {'mira', 'SWVM'}  # TODO: put on attribute printers and add to already trained model files!
     training_k_random_labelings = 0
     training_k_best_viterbi_labelings = 15
