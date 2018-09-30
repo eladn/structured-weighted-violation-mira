@@ -1,5 +1,5 @@
 from constants import SENTENCE_CLASSIFIER, DOCUMENT_CLASSIFIER, SENTENCE_STRUCTURED, STRUCTURED_JOINT, \
-    DOCUMENT_LABELS, SENTENCE_LABELS, MODELS
+    DOCUMENT_LABELS, SENTENCE_LABELS, MODEL_TYPES
 from document import Document
 from utils import ProgressBar
 
@@ -220,7 +220,7 @@ class FeatureVector:
     def evaluate_clique_feature_vector(self, document: Document, sen_index: int, model,
                                        document_label=None, sentence_label=None,
                                        pre_sentence_label=None):
-        assert model in MODELS
+        assert model in MODEL_TYPES
         assert document_label is None or document_label in DOCUMENT_LABELS
         assert sentence_label is None or sentence_label in SENTENCE_LABELS
         assert pre_sentence_label is None or pre_sentence_label in SENTENCE_LABELS
