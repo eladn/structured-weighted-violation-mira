@@ -62,7 +62,7 @@ class SentimentModelTrainerSWVM(SentimentModelTrainerBase):
     def calc_weighted_structured_fv_diff(self, document: Document, y: list, y_tag: list, y_fv: np.ndarray,
                                          previous_w: np.ndarray):
         phi_mj_deltas = [
-            y_fv - self.features_extractor.evaluate_document_feature_vector_summed(document, mj)  # FIXME: is it correct or opposite?
+            y_fv - self.features_extractor.evaluate_document_feature_vector_summed(document, mj)
             for mj in self.iterate_over_mj(y, y_tag)
         ]
 
