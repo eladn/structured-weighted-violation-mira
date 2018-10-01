@@ -1,11 +1,13 @@
 
 
-# from the anaconda directory:
-pip install qpsolvers
+# At least one of the following two optimizers:
+# (Don't forget to set the selected optimizer in `sentiment_model_configuration.py`)
 
-# for MIRA
+
+# for QP optimizer (usually faster than the cvx for our proposes)
+pip install qpsolvers  # run from the anaconda directory
 conda install -c oxfordcontrol osqp
 
-# for SWVP
+# for CVX optimizer
 conda install -c conda-forge lapack
 conda install -c cvxgrp cvxpy

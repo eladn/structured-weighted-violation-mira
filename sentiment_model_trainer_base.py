@@ -15,7 +15,7 @@ from corpus_features_extractor import CorpusFeaturesExtractor
 from sentiment_model import SentimentModel
 from utils import ProgressBar, print_title, shuffle_iterate_over_batches
 from sentiment_model_configuration import SentimentModelConfiguration
-from optimizers import *
+from optimizers import OptimizerLoader
 
 
 class SentimentModelTrainerBase(ABC):
@@ -36,7 +36,7 @@ class SentimentModelTrainerBase(ABC):
         self.evaluated_feature_vectors = []
         self.evaluated_feature_vectors_summed = []
         self.model_config = model_config
-        self.optimizer = OPTIMIZERS[model_config.optimizer]()
+        self.optimizer = OptimizerLoader.load_optimizer(model_config.optimizer)
 
     def evaluate_feature_vectors(self):
         start_time = time.time()
