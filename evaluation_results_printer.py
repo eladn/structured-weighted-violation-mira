@@ -49,7 +49,7 @@ def evaluation_results_json_to_table(evaluation_results: list, param_columns_pri
                     if result_over not in result_for_iterno[dataset_name]:
                         line.append(None)
                         continue
-                    is_best_mark = '**' if result_model.max_test_acc[0] == iterno and dataset_name == 'test' else ''
+                    is_best_mark = '**' if result_model.max_test_acc[0] == iterno and dataset_name == 'test' and result_over == accuracies_types[0] else ''
                     accuracy = result_for_iterno[dataset_name][result_over]['accuracy']
                     accuracy_str = '{is_best_mark}{0:.5f}{is_best_mark}'.format(float(accuracy), is_best_mark=is_best_mark)
                     line.append(accuracy_str)
