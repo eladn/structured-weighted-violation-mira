@@ -56,7 +56,7 @@ class SentimentModelTrainerSWVM(SentimentModelTrainerBase):
         gamma_denominator = 0
         for phi_mj_delta in phi_mj_deltas:
             dot_product = np.dot(previous_w, phi_mj_delta)
-            gamma_denominator += (-1) * np.min(dot_product, 0)
+            gamma_denominator += (-1) * np.min([dot_product, 0])
         return gamma_denominator
 
     def calc_weighted_structured_fv_diff(self, document: Document, y: list, y_tag: list, y_fv: np.ndarray,
@@ -73,7 +73,7 @@ class SentimentModelTrainerSWVM(SentimentModelTrainerBase):
             if np.abs(gamma_denominator) < 0.00001:
                 gamma_mj = 1 / len(phi_mj_deltas)
             else:
-                gamma_mj_nominator = (-1) * np.min(np.dot(previous_w, phi_mj_delta), 0)
+                gamma_mj_nominator = (-1) * np.min([np.dot(previous_w, phi_mj_delta), 0])
                 gamma_mj = gamma_mj_nominator / gamma_denominator
 
             weighted_structured_fv_diff += gamma_mj * phi_mj_delta
