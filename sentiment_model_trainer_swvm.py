@@ -2,9 +2,63 @@ from sentiment_model_trainer_base import SentimentModelTrainerBase
 from document import Document
 
 import numpy as np
+from abc import ABC, abstractmethod
+
+
+class SWVMGammaFunctionBase(ABC):
+    @abstractmethod
+    def calc_weighted_structured_fv_diff(self, phi_mj_fv_deltas, previous_w: np.ndarray):
+        ...
+
+
+class SWVMUniformGammaFunction(SWVMGammaFunctionBase):
+    def calc_weighted_structured_fv_diff(self, phi_mj_fv_deltas, previous_w: np.ndarray):
+        weighted_structured_fv_diff = 0
+        for phi_mj_delta in phi_mj_fv_deltas:
+            gamma_mj = 1 / len(phi_mj_fv_deltas)
+            weighted_structured_fv_diff += gamma_mj * phi_mj_delta
+        return weighted_structured_fv_diff
+
+
+class SWVMWeightedMarginGammaFunction(SWVMGammaFunctionBase):
+    def calc_weighted_structured_fv_diff(self, phi_mj_fv_deltas, previous_w: np.ndarray):
+        gamma_denominator = self.calc_gamma_denominator(phi_mj_fv_deltas, previous_w)
+        weighted_structured_fv_diff = 0
+        for phi_mj_delta in phi_mj_fv_deltas:
+            if np.abs(gamma_denominator) < 0.00001:
+                gamma_mj = 1 / len(phi_mj_fv_deltas)
+            else:
+                gamma_mj_nominator = (-1) * np.min([np.dot(previous_w, phi_mj_delta), 0])
+                gamma_mj = gamma_mj_nominator / gamma_denominator
+            weighted_structured_fv_diff += gamma_mj * phi_mj_delta
+        return weighted_structured_fv_diff
+
+    def calc_gamma_denominator(self, phi_mj_deltas: list, previous_w: np.ndarray):
+        gamma_denominator = 0
+        for phi_mj_delta in phi_mj_deltas:
+            dot_product = np.dot(previous_w, phi_mj_delta)
+            gamma_denominator += (-1) * np.min([dot_product, 0])
+        return gamma_denominator
+
+
+class SWVMGammaFunctionLoader:
+    @staticmethod
+    def load_gamma_function(gamma_function_name: str):
+        if gamma_function_name == 'wm':
+            return SWVMWeightedMarginGammaFunction()
+        elif gamma_function_name == 'uniform':
+            return SWVMUniformGammaFunction()
+        elif gamma_function_name == 'optimization':
+            raise NotImplemented()
+        else:
+            raise ValueError('There is no `{}` gamma function defined.'.format(gamma_function_name))
 
 
 class SentimentModelTrainerSWVM(SentimentModelTrainerBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.gamma_function = SWVMGammaFunctionLoader.load_gamma_function(self.model_config.SWVM_gamma_function)
+        assert isinstance(self.gamma_function, SWVMGammaFunctionBase)
 
     def calc_constraints_for_update_step_on_batch(self, previous_w: np.ndarray, documents_batch: list,
                                                   feature_vectors_batch: list, inferred_labelings_batch: list):
@@ -46,36 +100,16 @@ class SentimentModelTrainerSWVM(SentimentModelTrainerBase):
                 m_j[idx] = y[idx]
 
         # yield also the actual `y_tag` labeling if needed
-        if labeling_nr > 1:
-            m_j = y_tag
-            if copy:
-                m_j = list(m_j)
-            yield m_j
-
-    def calc_gamma_denominator(self, phi_mj_deltas: list, previous_w: np.ndarray):
-        gamma_denominator = 0
-        for phi_mj_delta in phi_mj_deltas:
-            dot_product = np.dot(previous_w, phi_mj_delta)
-            gamma_denominator += (-1) * np.min([dot_product, 0])
-        return gamma_denominator
+        # if labeling_nr > 1:
+        #     m_j = y_tag
+        #     if copy:
+        #         m_j = list(m_j)
+        #     yield m_j
 
     def calc_weighted_structured_fv_diff(self, document: Document, y: list, y_tag: list, y_fv: np.ndarray,
                                          previous_w: np.ndarray):
-        phi_mj_deltas = [
+        phi_mj_fv_deltas = [
             y_fv - self.features_extractor.evaluate_document_feature_vector_summed(document, mj)
             for mj in self.iterate_over_mj(y, y_tag)
         ]
-
-        gamma_denominator = self.calc_gamma_denominator(phi_mj_deltas, previous_w)
-
-        weighted_structured_fv_diff = 0
-        for phi_mj_delta in phi_mj_deltas:
-            if np.abs(gamma_denominator) < 0.00001:
-                gamma_mj = 1 / len(phi_mj_deltas)
-            else:
-                gamma_mj_nominator = (-1) * np.min([np.dot(previous_w, phi_mj_delta), 0])
-                gamma_mj = gamma_mj_nominator / gamma_denominator
-
-            weighted_structured_fv_diff += gamma_mj * phi_mj_delta
-
-        return weighted_structured_fv_diff
+        return self.gamma_function.calc_weighted_structured_fv_diff(phi_mj_fv_deltas, previous_w)

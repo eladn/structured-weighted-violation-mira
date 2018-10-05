@@ -5,16 +5,17 @@ from utils import hash_file, AttributePrinter
 class SentimentModelConfiguration:
     optimizer = 'qp'  # {'qp', 'cvx'}
     trainer_alg = 'mira'  # {'mira', 'SWVM'}
+    SWVM_gamma_function = 'wm'
     training_k_random_labelings = 0
-    training_k_best_viterbi_labelings = 15
-    training_iterations = 5
-    training_batch_size = 8
+    training_k_best_viterbi_labelings = 6
+    training_iterations = 11
+    training_batch_size = 6
 
     # The loss type controls how does the document loss is combined with the sentences loss in the joint model.
     loss_type = 'plus'  # {'mult', 'plus', 'max'}
     doc_loss_factor = 0.2
 
-    min_nr_feature_occurrences = 3
+    min_nr_feature_occurrences = 7
 
     docs_train_filename_base_wo_ext = "train-0.6p"
     docs_test_filename_base_wo_ext = "test-0.2p"
@@ -94,8 +95,9 @@ class SentimentModelConfiguration:
 
     model_configurations = (
         AttributePrinter(attribute='model_type', name='model'),
-        AttributePrinter(attribute='trainer_alg', name='alg',
-                         print_condition=lambda val, _: val != 'mira'),
+        AttributePrinter(attribute='trainer_alg', name='alg'),
+        AttributePrinter(attribute='SWVM_gamma_function', name='gamma',
+                         print_condition=lambda _, config: config.trainer_alg == 'SWVM'),
         AttributePrinter(attribute='training_k_random_labelings', name='k-rnd', print_iff_true=True),
         AttributePrinter(attribute='training_k_best_viterbi_labelings', name='k-viterbi', print_iff_true=True),
         AttributePrinter(attribute='training_iterations', name='iter'),
